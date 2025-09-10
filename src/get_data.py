@@ -6,6 +6,11 @@ import base64
 # Gmail API scopes required
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
+# Global variables that can be imported
+service = None
+messages = []
+email_bodies = []
+
 # Function to login user into their email via localhost:8080
 def gmail_service():
     creds = None
@@ -13,11 +18,6 @@ def gmail_service():
     creds = flow.run_local_server(port=8080)
     service = build("gmail", "v1", credentials=creds)
     return service
-
-service = gmail_service()
-results = service.users().messages().list(userId="me", maxResults=3).execute()
-messages = results.get("messages", [])
-
 
 # Extracts and decodes email
 def get_email_body(msg_data):
@@ -33,17 +33,35 @@ def get_email_body(msg_data):
     parts = payload.get("parts", [])
     for part in parts:
         if part["mimeType"] in ["text/plain", "text/html"]:
-            data = part["body"]["data"]
-            decoded = base64.urlsafe_b64decode(data).decode("utf-8")
-            return decoded
+            if "data" in part["body"]:
+                data = part["body"]["data"]
+                decoded = base64.urlsafe_b64decode(data).decode("utf-8")
+                return decoded
     
     # return nothing if somehow email has neither cases
     return "Somehow neither cases has matched??"
 
-
-# Iterate through all emails extracted
-for msg in messages:
-    msg_data = service.users().messages().get(userId="me", id=msg["id"], format="full").execute()
+def fetch_emails():
+    global service, messages, email_bodies  # Make variables global so they can be imported
     
-    body = get_email_body(msg_data)
-    print("This is the body", body)
+    service = gmail_service()
+    results = service.users().messages().list(userId="me", maxResults=3).execute()
+    messages = results.get("messages", [])
+    
+    email_bodies = []
+    for msg in messages:
+        msg_data = service.users().messages().get(userId="me", id=msg["id"], format="full").execute()
+        body = get_email_body(msg_data)
+        email_bodies.append(body)
+    
+    return email_bodies
+
+def initialize_data():
+    """Call this function to fetch and populate all variables"""
+    return fetch_emails()
+
+# Only run this if the file is executed directly
+if __name__ == "__main__":
+    bodies = fetch_emails()
+    for body in bodies:
+        print("This is the body", body)
