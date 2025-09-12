@@ -13,6 +13,7 @@ from get_data import GetData
 # Import keyword detection components
 from keyword_detector import KeywordDetector
 from position_scorer import PositionScorer
+from distancechecker import DomainURLDetector
 
 # Gmail API scopes required
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]

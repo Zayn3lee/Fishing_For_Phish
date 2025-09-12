@@ -139,4 +139,4 @@ class PhishingKeywordAnalyzer:
             sorted_categories = sorted(
                 analysis_result['category_scores'].items(), 
                 key=lambda x: x[1], 
-                reverse=True
+                reverse=True)
