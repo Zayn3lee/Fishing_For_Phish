@@ -14,7 +14,9 @@ from get_data_manual import GetDataManual
 # Import keyword detection components
 from keyword_detector import KeywordDetector
 from position_scorer import PositionScorer
-from distancechecker import DomainURLDetector
+
+# Import domain/URL detection - ADD THIS LINE
+from distancechecker import analyze_email_domain_and_urls
 
 # Gmail API scopes required
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
@@ -29,6 +31,7 @@ class PhishingEmailAnalyzer:
         self.service = GetData.gmail_service()
         self.keyword_detector = KeywordDetector()
         self.position_scorer = PositionScorer()
+        # Remove the distance_checker line since we're using the function directly
 
     def analyze_manual_email(self):
         """
@@ -64,6 +67,13 @@ class PhishingEmailAnalyzer:
         email_length = len(email["Subject"]) + len(email["Body"])
         scoring_result = self.position_scorer.calculate_comprehensive_score(all_matches, email_length)
         
+        # ADD DOMAIN/URL ANALYSIS
+        domain_url_analysis = analyze_email_domain_and_urls(
+            sender_email=email["From"],
+            email_body=email["Body"],
+            email_subject=email["Subject"]
+        )
+        
         # Combine results
         analysis = {
             'sender': email["From"],
@@ -73,13 +83,12 @@ class PhishingEmailAnalyzer:
             'total_matches': len(all_matches),
             'subject_matches': len(subject_matches),
             'body_matches': len(body_matches),
+            'domain_url_analysis': domain_url_analysis,  # ADD THIS
             **scoring_result  # Include all scoring results
         }
         
         return analysis
 
-
-    
     def analyze_single_email(self, msg_data):
         """
         Analyze a single email for phishing indicators
@@ -105,6 +114,13 @@ class PhishingEmailAnalyzer:
         email_length = len(subject) + len(body)
         scoring_result = self.position_scorer.calculate_comprehensive_score(all_matches, email_length)
         
+        # ADD DOMAIN/URL ANALYSIS
+        domain_url_analysis = analyze_email_domain_and_urls(
+            sender_email=sender,
+            email_body=body,
+            email_subject=subject
+        )
+        
         # Combine results
         analysis = {
             'sender': sender,
@@ -114,6 +130,7 @@ class PhishingEmailAnalyzer:
             'total_matches': len(all_matches),
             'subject_matches': len(subject_matches),
             'body_matches': len(body_matches),
+            'domain_url_analysis': domain_url_analysis,  # ADD THIS
             **scoring_result  # Include all scoring results
         }
         
@@ -186,6 +203,19 @@ class PhishingEmailAnalyzer:
         print(f"  Body Matches: {analysis['body_matches']}")
         print()
         
+        # ADD DOMAIN/URL ANALYSIS DISPLAY
+        domain_analysis = analysis.get('domain_url_analysis', {})
+        if domain_analysis:
+            print(f"DOMAIN/URL SECURITY:")
+            print(f"  Domain Risk: {domain_analysis.get('risk_level', 'UNKNOWN')}")
+            print(f"  Domain Score: {domain_analysis.get('risk_score', 0)}")
+            print(f"  URLs Found: {domain_analysis.get('total_urls_analyzed', 0)}")
+            print(f"  Suspicious URLs: {domain_analysis.get('suspicious_url_count', 0)}")
+            
+            if domain_analysis.get('risk_factors'):
+                print(f"  Risk Factors: {', '.join(domain_analysis['risk_factors'])}")
+            print()
+        
         if analysis['category_scores']:
             print("SUSPICIOUS CATEGORIES:")
             sorted_categories = sorted(
@@ -228,6 +258,12 @@ class PhishingEmailAnalyzer:
         medium_risk = sum(1 for a in analyses if a['risk_level'] == 'MEDIUM')
         suspicious_emails = sum(1 for a in analyses if a['total_score'] >= 10)
         
+        # ADD DOMAIN/URL STATISTICS
+        domain_high_risk = sum(1 for a in analyses 
+                             if a.get('domain_url_analysis', {}).get('risk_level') == 'HIGH')
+        total_suspicious_urls = sum(a.get('domain_url_analysis', {}).get('suspicious_url_count', 0) 
+                                  for a in analyses)
+        
         avg_score = sum(a['total_score'] for a in analyses) / total_emails
         
         return {
@@ -235,6 +271,8 @@ class PhishingEmailAnalyzer:
             'high_risk_emails': high_risk,
             'medium_risk_emails': medium_risk,
             'suspicious_emails': suspicious_emails,
+            'domain_high_risk_emails': domain_high_risk,  # ADD THIS
+            'total_suspicious_urls': total_suspicious_urls,  # ADD THIS
             'average_keyword_score': round(avg_score, 2),
             'highest_score': max(a['total_score'] for a in analyses),
             'most_suspicious_email': max(analyses, key=lambda x: x['total_score'])
@@ -261,6 +299,8 @@ if __name__ == "__main__":
     print(f"High Risk Emails: {summary.get('high_risk_emails', 0)}")
     print(f"Medium Risk Emails: {summary.get('medium_risk_emails', 0)}")
     print(f"Suspicious Emails: {summary.get('suspicious_emails', 0)}")
+    print(f"Domain High Risk Emails: {summary.get('domain_high_risk_emails', 0)}")  # ADD THIS
+    print(f"Total Suspicious URLs Found: {summary.get('total_suspicious_urls', 0)}")  # ADD THIS
     print(f"Average Keyword Score: {summary.get('average_keyword_score', 0)}")
     print(f"Highest Score: {summary.get('highest_score', 0)}")
     
