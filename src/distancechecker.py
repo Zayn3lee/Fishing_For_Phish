@@ -1,40 +1,30 @@
 """
 Domain and URL Security Detection Module
-Detects suspicious domains using edit distance and identifies malicious URLs
-Fixed version with proper imports and error handling
+Clean, organized version for phishing email detection
 """
 
 import re
 import urllib.parse
 import ipaddress
 from difflib import SequenceMatcher
+from typing import List, Dict, Set, Optional
 
-# Import the fixed GetData class
-try:
-    from get_data import GetData
-except ImportError:
-    print("Warning: get_data module not found. Some features may not work.")
-    GetData = None
 
 class DomainURLDetector:
     """
-    Detects suspicious domains and URLs in emails using edit distance and pattern analysis
+    Detects suspicious domains and URLs in emails for phishing detection
     """
     
     def __init__(self):
-        """Initialize with known legitimate domains and suspicious patterns"""
-        # Initialize Gmail service if GetData is available
-        if GetData:
-            try:
-                self.service = GetData.gmail_service()
-            except Exception as e:
-                print(f"Warning: Could not initialize Gmail service: {e}")
-                self.service = None
-        else:
-            self.service = None
-        
-        # Common legitimate domains to compare against
-        self.legitimate_domains = {
+        self.legitimate_domains = self._initialize_legitimate_domains()
+        self.suspicious_patterns = self._initialize_suspicious_patterns()
+        self.phishing_domain_keywords = self._initialize_phishing_keywords()
+        self.suspicious_tlds = self._initialize_suspicious_tlds()
+        self.shortener_domains = self._initialize_shortener_domains()
+    
+    def _initialize_legitimate_domains(self) -> Set[str]:
+        """Initialize set of known legitimate domains"""
+        return {
             # Banking and Financial
             'paypal.com', 'square.com', 'venmo.com', 'stripe.com',
             'citibank.com', 'bankofamerica.com', 'wellsfargo.com',
@@ -64,9 +54,10 @@ class DomainURLDetector:
             'cnn.com', 'bbc.com', 'reuters.com', 'bloomberg.com',
             'nytimes.com', 'wsj.com', 'guardian.com'
         }
-        
-        # Suspicious URL patterns
-        self.suspicious_patterns = [
+    
+    def _initialize_suspicious_patterns(self) -> List[str]:
+        """Initialize suspicious URL regex patterns"""
+        return [
             r'bit\.ly', r'tinyurl\.com', r't\.co', r'goo\.gl',  # URL shorteners
             r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}',  # IP addresses
             r'[a-z0-9]+-[a-z0-9]+-[a-z0-9]+\.',  # Multiple hyphens
@@ -76,195 +67,68 @@ class DomainURLDetector:
             r'confirm[a-z0-9]*\.', r'account[a-z0-9]*\.',
             r'suspended[a-z0-9]*\.', r'limited[a-z0-9]*\.',
         ]
-        
-        # Common phishing keywords in domains
-        self.phishing_domain_keywords = [
+    
+    def _initialize_phishing_keywords(self) -> List[str]:
+        """Initialize common phishing keywords found in domains"""
+        return [
             'secure', 'verify', 'update', 'confirm', 'urgent', 'suspended',
             'blocked', 'limited', 'restricted', 'temporary', 'alert',
             'warning', 'notice', 'action', 'required', 'immediate',
             'account', 'banking', 'payment', 'billing', 'invoice'
         ]
-        
-        # Suspicious TLDs
-        self.suspicious_tlds = [
+    
+    def _initialize_suspicious_tlds(self) -> List[str]:
+        """Initialize suspicious top-level domains"""
+        return [
             '.tk', '.ml', '.ga', '.cf', '.click', '.download',
             '.top', '.win', '.bid', '.loan', '.work', '.date',
             '.racing', '.accountant', '.science', '.party'
         ]
-        
-        # URL shortener domains
-        self.shortener_domains = [
+    
+    def _initialize_shortener_domains(self) -> List[str]:
+        """Initialize URL shortener domains"""
+        return [
             'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 
             'short.link', 'rb.gy', 'cutt.ly', 'is.gd', 'buff.ly'
         ]
     
-    def calculate_edit_distance_similarity(self, str1, str2):
+    def extract_urls_from_text(self, text: str) -> List[str]:
         """
-        Calculate similarity between two strings using edit distance
+        Extract URLs from email text using multiple patterns
         
         Args:
-            str1 (str): First string
-            str2 (str): Second string
+            text: Text to extract URLs from
             
         Returns:
-            float: Similarity ratio (0-1, where 1 is identical)
-        """
-        if not str1 or not str2:
-            return 0.0
-        return SequenceMatcher(None, str1.lower(), str2.lower()).ratio()
-    
-    def extract_domain_from_email(self, email_address):
-        """
-        Extract domain from email address
-        
-        Args:
-            email_address (str): Email address
-            
-        Returns:
-            str: Domain part of email, or None if invalid
-        """
-        if not email_address:
-            return None
-            
-        try:
-            # Handle cases like "Name <email@domain.com>"
-            if '<' in email_address and '>' in email_address:
-                email_match = re.search(r'<([^>]+)>', email_address)
-                if email_match:
-                    email_address = email_match.group(1)
-            
-            # Extract domain part
-            if '@' in email_address:
-                domain = email_address.split('@')[-1].strip()
-                # Remove any trailing characters that aren't part of domain
-                domain = re.sub(r'[^a-zA-Z0-9.-].*$', '', domain)
-                return domain.lower()
-                
-        except Exception as e:
-            print(f"Error extracting domain from {email_address}: {e}")
-        
-        return None
-    
-    def check_domain_similarity(self, suspicious_domain, threshold=0.8):
-        """
-        Check if a domain is suspiciously similar to legitimate domains
-        
-        Args:
-            suspicious_domain (str): Domain to check
-            threshold (float): Similarity threshold (0-1)
-            
-        Returns:
-            dict: Analysis results including matches and scores
-        """
-        if not suspicious_domain:
-            return {
-                'is_suspicious': False, 
-                'matches': [], 
-                'max_similarity': 0,
-                'suspicious_domain': None
-            }
-        
-        suspicious_domain = suspicious_domain.lower().strip()
-        matches = []
-        max_similarity = 0
-        
-        # Check against legitimate domains
-        for legit_domain in self.legitimate_domains:
-            similarity = self.calculate_edit_distance_similarity(suspicious_domain, legit_domain)
-            
-            if similarity > max_similarity:
-                max_similarity = similarity
-            
-            # If very similar but not identical, it's suspicious
-            if threshold <= similarity < 1.0:
-                matches.append({
-                    'legitimate_domain': legit_domain,
-                    'similarity': round(similarity, 3),
-                    'suspicious_domain': suspicious_domain
-                })
-        
-        # Additional suspicious pattern checks
-        has_phishing_keywords = any(
-            keyword in suspicious_domain 
-            for keyword in self.phishing_domain_keywords
-        )
-        
-        has_multiple_hyphens = suspicious_domain.count('-') >= 2
-        
-        has_suspicious_tld = any(
-            suspicious_domain.endswith(tld) 
-            for tld in self.suspicious_tlds
-        )
-        
-        has_numbers_and_letters_mixed = bool(
-            re.search(r'[0-9].*[a-z]|[a-z].*[0-9]', suspicious_domain)
-        )
-        
-        # Check for excessive length with mixed characters
-        is_excessively_long = (
-            has_numbers_and_letters_mixed and 
-            len(suspicious_domain) > 15
-        )
-        
-        # Sort matches by similarity (highest first)
-        matches.sort(key=lambda x: x['similarity'], reverse=True)
-        
-        # Determine if suspicious
-        is_suspicious = (
-            len(matches) > 0 or 
-            has_phishing_keywords or 
-            has_multiple_hyphens or 
-            has_suspicious_tld or
-            is_excessively_long
-        )
-        
-        return {
-            'is_suspicious': is_suspicious,
-            'matches': matches,
-            'max_similarity': round(max_similarity, 3),
-            'has_phishing_keywords': has_phishing_keywords,
-            'has_multiple_hyphens': has_multiple_hyphens,
-            'has_suspicious_tld': has_suspicious_tld,
-            'suspicious_domain': suspicious_domain
-        }
-    
-    def extract_urls_from_text(self, text):
-        """
-        Extract URLs from email text using comprehensive patterns
-        
-        Args:
-            text (str): Email text content
-            
-        Returns:
-            list: List of found URLs
+            List of unique, cleaned URLs
         """
         if not text:
             return []
         
-        # Enhanced URL patterns to catch various formats
+        # URL extraction patterns
         url_patterns = [
             r'https?://[^\s<>"\'\[\]{}]+',  # Standard HTTP/HTTPS URLs
             r'www\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s<>"\'\[\]{}]*)?',  # www.domain.com
             r'(?<!@)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s<>"\'\[\]{}]*)?',  # domain.com/path
         ]
         
-        urls = set()  # Use set to avoid duplicates
+        urls = set()
         
         for pattern in url_patterns:
             found_urls = re.findall(pattern, text, re.IGNORECASE)
+            
             for url in found_urls:
-                # Clean up URL and validate
                 cleaned_url = self._clean_url(url)
                 if cleaned_url and self._is_valid_url(cleaned_url):
                     urls.add(cleaned_url)
         
         return list(urls)
     
-    def _clean_url(self, url):
+    def _clean_url(self, url: str) -> Optional[str]:
         """Clean and normalize URL"""
         if not url:
             return None
-            
+        
         # Remove trailing punctuation and brackets
         url = re.sub(r'[.,;!?\]\}]+$', '', url.strip())
         
@@ -273,7 +137,7 @@ class DomainURLDetector:
         
         return url if url else None
     
-    def _is_valid_url(self, url):
+    def _is_valid_url(self, url: str) -> bool:
         """Basic URL validation"""
         if not url or len(url) < 4:
             return False
@@ -289,16 +153,115 @@ class DomainURLDetector:
         # Should look like a reasonable URL
         return bool(re.match(r'^(https?://|www\.)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', url))
     
-    def is_ip_address(self, domain):
+    def analyze_url_suspicious_patterns(self, url: str) -> Dict:
         """
-        Check if a domain is actually an IP address
+        Analyze URL for suspicious patterns and characteristics
         
         Args:
-            domain (str): Domain to check
+            url: URL to analyze
             
         Returns:
-            bool: True if it's an IP address
+            Dictionary with analysis results
         """
+        if not url:
+            return self._create_analysis_result(False, [], url, '')
+        
+        reasons = []
+        domain = ''
+        
+        try:
+            # Normalize URL for parsing
+            normalized_url = self._normalize_url(url)
+            
+            # Parse URL
+            parsed_url = urllib.parse.urlparse(normalized_url)
+            domain = parsed_url.netloc.lower()
+            
+            # Remove www. prefix for analysis
+            analysis_domain = domain[4:] if domain.startswith('www.') else domain
+            
+            # Perform various security checks
+            self._check_ip_address(analysis_domain, reasons)
+            self._check_suspicious_patterns(analysis_domain, reasons)
+            self._check_url_shorteners(analysis_domain, reasons)
+            self._check_subdomain_count(analysis_domain, reasons)
+            self._check_suspicious_tlds(analysis_domain, reasons)
+            self._check_character_patterns(analysis_domain, reasons)
+            self._check_homograph_attacks(analysis_domain, reasons)
+            self._check_url_path(parsed_url.path, reasons)
+            
+        except Exception as e:
+            reasons.append(f'URL analysis error: {str(e)}')
+        
+        return self._create_analysis_result(len(reasons) > 0, reasons, url, domain)
+    
+    def _normalize_url(self, url: str) -> str:
+        """Normalize URL for parsing"""
+        if not url.startswith(('http://', 'https://')):
+            if url.startswith('www.'):
+                return 'http://' + url
+            elif '.' in url and not url.startswith('mailto:'):
+                return 'http://' + url
+        return url
+    
+    def _check_ip_address(self, domain: str, reasons: List[str]) -> None:
+        """Check if domain is an IP address"""
+        if self._is_ip_address(domain):
+            reasons.append('Uses IP address instead of domain name')
+    
+    def _check_suspicious_patterns(self, domain: str, reasons: List[str]) -> None:
+        """Check for suspicious patterns in domain"""
+        for pattern in self.suspicious_patterns:
+            if re.search(pattern, domain):
+                reasons.append(f'Matches suspicious pattern: {pattern}')
+    
+    def _check_url_shorteners(self, domain: str, reasons: List[str]) -> None:
+        """Check for URL shortener services"""
+        if any(shortener in domain for shortener in self.shortener_domains):
+            reasons.append('Uses URL shortener service')
+    
+    def _check_subdomain_count(self, domain: str, reasons: List[str]) -> None:
+        """Check for excessive subdomains"""
+        domain_parts = domain.split('.')
+        if len(domain_parts) > 4:  # More than typical subdomain.domain.tld
+            reasons.append('Excessive number of subdomains')
+    
+    def _check_suspicious_tlds(self, domain: str, reasons: List[str]) -> None:
+        """Check for suspicious top-level domains"""
+        if any(domain.endswith(tld) for tld in self.suspicious_tlds):
+            reasons.append('Uses suspicious top-level domain')
+    
+    def _check_character_patterns(self, domain: str, reasons: List[str]) -> None:
+        """Check for suspicious character patterns"""
+        if re.search(r'[0-9].*[a-z].*[0-9]', domain):
+            reasons.append('Suspicious alternating numbers and letters')
+        
+        if domain.count('-') >= 3:
+            reasons.append('Excessive use of hyphens')
+    
+    def _check_homograph_attacks(self, domain: str, reasons: List[str]) -> None:
+        """Check for potential homograph attacks"""
+        if any(char in domain for char in ['0', '1', 'l', 'I']):
+            # Check similarity to legitimate domains
+            for legit_domain in list(self.legitimate_domains)[:20]:  # Check top domains
+                similarity = SequenceMatcher(None, domain, legit_domain).ratio()
+                if similarity > 0.8 and similarity < 1.0:  # Similar but not exact
+                    reasons.append(f'Potentially mimics legitimate domain: {legit_domain}')
+                    break
+    
+    def _check_url_path(self, path: str, reasons: List[str]) -> None:
+        """Check URL path for suspicious patterns"""
+        if path:
+            path_lower = path.lower()
+            suspicious_path_patterns = [
+                'verify', 'confirm', 'secure', 'update', 'login',
+                'account', 'suspended', 'locked', 'urgent'
+            ]
+            if any(pattern in path_lower for pattern in suspicious_path_patterns):
+                reasons.append('Suspicious keywords in URL path')
+    
+    def _is_ip_address(self, domain: str) -> bool:
+        """Check if a domain is actually an IP address"""
         if not domain:
             return False
             
@@ -308,327 +271,129 @@ class DomainURLDetector:
         except ValueError:
             return False
     
-    def analyze_url_suspicious_patterns(self, url):
+    def _create_analysis_result(self, is_suspicious: bool, reasons: List[str], 
+                              url: str, domain: str) -> Dict:
+        """Create standardized analysis result"""
+        return {
+            'is_suspicious': is_suspicious,
+            'reasons': reasons,
+            'analyzed_url': url,
+            'domain': domain,
+            'risk_score': len(reasons)  # Simple scoring based on number of issues
+        }
+    
+    def analyze_sender_domain(self, sender_email: str) -> Dict:
         """
-        Analyze URL for suspicious patterns
+        Analyze sender email domain for legitimacy
         
         Args:
-            url (str): URL to analyze
+            sender_email: Email address to analyze
             
         Returns:
-            dict: Analysis results
+            Dictionary with sender domain analysis
         """
-        if not url:
-            return {'is_suspicious': False, 'reasons': [], 'analyzed_url': '', 'domain': ''}
+        if not sender_email or '@' not in sender_email:
+            return {'is_suspicious': True, 'reason': 'Invalid email format'}
         
+        domain = sender_email.split('@')[1].lower()
+        
+        # Check if it's a known legitimate domain
+        if domain in self.legitimate_domains:
+            return {'is_suspicious': False, 'reason': 'Known legitimate domain'}
+        
+        # Check for suspicious characteristics
         reasons = []
-        domain = ''
+        if any(keyword in domain for keyword in self.phishing_domain_keywords):
+            reasons.append('Contains phishing keywords')
         
-        try:
-            # Normalize URL for parsing
-            normalized_url = url
-            if not url.startswith(('http://', 'https://')):
-                if url.startswith('www.'):
-                    normalized_url = 'http://' + url
-                elif '.' in url and not url.startswith('mailto:'):
-                    normalized_url = 'http://' + url
-            
-            # Parse URL
-            try:
-                parsed_url = urllib.parse.urlparse(normalized_url)
-                domain = parsed_url.netloc.lower()
-            except Exception:
-                reasons.append('Invalid URL format')
-                return {
-                    'is_suspicious': True,
-                    'reasons': reasons,
-                    'analyzed_url': url,
-                    'domain': domain
-                }
-            
-            # Remove www. prefix for analysis
-            analysis_domain = domain
-            if analysis_domain.startswith('www.'):
-                analysis_domain = analysis_domain[4:]
-            
-            # Check for IP address instead of domain
-            if self.is_ip_address(analysis_domain):
-                reasons.append('Uses IP address instead of domain name')
-            
-            # Check for suspicious patterns in domain
-            for pattern in self.suspicious_patterns:
-                if re.search(pattern, analysis_domain):
-                    reasons.append(f'Matches suspicious pattern: {pattern}')
-            
-            # Check for URL shorteners
-            if any(shortener in analysis_domain for shortener in self.shortener_domains):
-                reasons.append('Uses URL shortener service')
-            
-            # Check for excessive subdomains
-            domain_parts = analysis_domain.split('.')
-            if len(domain_parts) > 4:  # More than typical subdomain.domain.tld
-                reasons.append('Excessive number of subdomains')
-            
-            # Check for suspicious TLDs
-            if any(analysis_domain.endswith(tld) for tld in self.suspicious_tlds):
-                reasons.append('Uses suspicious top-level domain')
-            
-            # Check for suspicious character patterns
-            if re.search(r'[0-9].*[a-z].*[0-9]', analysis_domain):
-                reasons.append('Suspicious alternating numbers and letters')
-            
-            if analysis_domain.count('-') >= 3:
-                reasons.append('Excessive use of hyphens')
-            
-            # Check for homograph attacks (basic)
-            if any(char in analysis_domain for char in ['0', '1', 'l', 'I']):
-                # Look for potential character substitution
-                for legit_domain in list(self.legitimate_domains)[:10]:  # Check top domains
-                    if self.calculate_edit_distance_similarity(analysis_domain, legit_domain) > 0.8:
-                        reasons.append(f'Potentially mimics legitimate domain: {legit_domain}')
-                        break
-            
-            # Check URL path for suspicious patterns
-            if parsed_url.path:
-                path = parsed_url.path.lower()
-                suspicious_path_patterns = [
-                    'verify', 'confirm', 'secure', 'update', 'login',
-                    'account', 'suspended', 'locked', 'urgent'
-                ]
-                if any(pattern in path for pattern in suspicious_path_patterns):
-                    reasons.append('Suspicious keywords in URL path')
-            
-        except Exception as e:
-            reasons.append(f'URL analysis error: {str(e)}')
+        if self._is_ip_address(domain):
+            reasons.append('Uses IP address as domain')
+        
+        if any(domain.endswith(tld) for tld in self.suspicious_tlds):
+            reasons.append('Uses suspicious TLD')
+        
+        # Check for typosquatting
+        for legit_domain in self.legitimate_domains:
+            similarity = SequenceMatcher(None, domain, legit_domain).ratio()
+            if similarity > 0.8 and similarity < 1.0:
+                reasons.append(f'Similar to legitimate domain: {legit_domain}')
+                break
         
         return {
             'is_suspicious': len(reasons) > 0,
             'reasons': reasons,
-            'analyzed_url': url,
-            'domain': domain
+            'domain': domain,
+            'risk_score': len(reasons)
         }
-    
-    def analyze_email_security(self, sender_email, email_body, email_subject=""):
-        """
-        Complete security analysis of email sender and content
-        
-        Args:
-            sender_email (str): Sender's email address
-            email_body (str): Email content
-            email_subject (str): Email subject line
-            
-        Returns:
-            dict: Complete security analysis
-        """
-        # Initialize results
-        analysis_results = {
-            'sender_email': sender_email or 'Unknown',
-            'sender_domain': None,
-            'domain_analysis': {},
-            'urls_found': [],
-            'suspicious_urls': [],
-            'risk_score': 0,
-            'risk_level': 'MINIMAL',
-            'risk_factors': [],
-            'total_urls_analyzed': 0,
-            'suspicious_url_count': 0
-        }
-        
-        try:
-            # Extract sender domain
-            sender_domain = self.extract_domain_from_email(sender_email)
-            analysis_results['sender_domain'] = sender_domain
-            
-            # Check sender domain similarity
-            if sender_domain:
-                domain_analysis = self.check_domain_similarity(sender_domain)
-                analysis_results['domain_analysis'] = domain_analysis
-            
-            # Extract URLs from email content
-            body_urls = self.extract_urls_from_text(email_body or "")
-            subject_urls = self.extract_urls_from_text(email_subject or "")
-            all_urls = list(set(body_urls + subject_urls))  # Remove duplicates
-            
-            analysis_results['urls_found'] = all_urls
-            analysis_results['total_urls_analyzed'] = len(all_urls)
-            
-            # Analyze each URL
-            suspicious_url_analyses = []
-            for url in all_urls:
-                url_analysis = self.analyze_url_suspicious_patterns(url)
-                if url_analysis['is_suspicious']:
-                    suspicious_url_analyses.append(url_analysis)
-            
-            analysis_results['suspicious_urls'] = suspicious_url_analyses
-            analysis_results['suspicious_url_count'] = len(suspicious_url_analyses)
-            
-            # Calculate overall risk score and factors
-            risk_score = 0
-            risk_factors = []
-            
-            # Domain-based risk scoring
-            if analysis_results['domain_analysis'].get('is_suspicious'):
-                domain_info = analysis_results['domain_analysis']
-                
-                if domain_info.get('matches'):
-                    risk_score += len(domain_info['matches']) * 25
-                    risk_factors.append('Sender domain similar to legitimate domain')
-                
-                if domain_info.get('has_phishing_keywords'):
-                    risk_score += 20
-                    risk_factors.append('Sender domain contains phishing keywords')
-                
-                if domain_info.get('has_multiple_hyphens'):
-                    risk_score += 15
-                    risk_factors.append('Sender domain has suspicious structure')
-                
-                if domain_info.get('has_suspicious_tld'):
-                    risk_score += 25
-                    risk_factors.append('Sender domain uses suspicious TLD')
-            
-            # URL-based risk scoring
-            if suspicious_url_analyses:
-                risk_score += len(suspicious_url_analyses) * 15
-                risk_factors.append(f'Contains {len(suspicious_url_analyses)} suspicious URLs')
-                
-                # Additional scoring for specific URL risks
-                for url_analysis in suspicious_url_analyses:
-                    if 'IP address' in ' '.join(url_analysis.get('reasons', [])):
-                        risk_score += 10
-                    if 'shortener' in ' '.join(url_analysis.get('reasons', [])):
-                        risk_score += 5
-            
-            # Determine risk level based on score
-            if risk_score >= 60:
-                risk_level = 'HIGH'
-            elif risk_score >= 35:
-                risk_level = 'MEDIUM'
-            elif risk_score >= 15:
-                risk_level = 'LOW'
-            else:
-                risk_level = 'MINIMAL'
-            
-            analysis_results.update({
-                'risk_score': risk_score,
-                'risk_level': risk_level,
-                'risk_factors': risk_factors
-            })
-            
-        except Exception as e:
-            print(f"Error in email security analysis: {e}")
-            analysis_results.update({
-                'error': str(e),
-                'risk_level': 'UNKNOWN'
-            })
-        
-        return analysis_results
-    
-    def print_security_analysis(self, analysis):
-        """
-        Print formatted security analysis results
-        
-        Args:
-            analysis (dict): Security analysis results
-        """
-        print(f"\n{'='*60}")
-        print(f"DOMAIN & URL SECURITY ANALYSIS")
-        print(f"{'='*60}")
-        
-        print(f"Sender: {analysis['sender_email']}")
-        print(f"Domain: {analysis['sender_domain']}")
-        print(f"Risk Level: {analysis['risk_level']}")
-        print(f"Risk Score: {analysis['risk_score']}")
-        print()
-        
-        # Domain analysis
-        domain_info = analysis.get('domain_analysis', {})
-        if domain_info.get('is_suspicious'):
-            print("🚨 SUSPICIOUS SENDER DOMAIN:")
-            
-            if domain_info.get('matches'):
-                print("  Similar to legitimate domains:")
-                for match in domain_info['matches'][:3]:  # Show top 3
-                    similarity_pct = match['similarity'] * 100
-                    print(f"    {match['suspicious_domain']} ≈ {match['legitimate_domain']} "
-                          f"({similarity_pct:.1f}% similar)")
-            
-            if domain_info.get('has_phishing_keywords'):
-                print("  ⚠️  Contains phishing-related keywords")
-            if domain_info.get('has_multiple_hyphens'):
-                print("  ⚠️  Suspicious domain structure (multiple hyphens)")
-            if domain_info.get('has_suspicious_tld'):
-                print("  ⚠️  Uses suspicious top-level domain")
-            print()
-        else:
-            print("✅ Sender domain appears legitimate")
-            print()
-        
-        # URL analysis
-        total_urls = analysis.get('total_urls_analyzed', 0)
-        suspicious_urls = analysis.get('suspicious_urls', [])
-        
-        print(f"URLs FOUND: {total_urls}")
-        
-        if suspicious_urls:
-            print(f"🚨 SUSPICIOUS URLs: {len(suspicious_urls)}")
-            for i, url_info in enumerate(suspicious_urls, 1):
-                print(f"  {i}. URL: {url_info['analyzed_url']}")
-                print(f"     Domain: {url_info['domain']}")
-                print(f"     Issues: {', '.join(url_info['reasons'])}")
-                print()
-        else:
-            if total_urls > 0:
-                print("✅ No suspicious URLs detected")
-            else:
-                print("ℹ️  No URLs found in email")
-        
-        # Risk factors summary
-        if analysis.get('risk_factors'):
-            print("RISK FACTORS IDENTIFIED:")
-            for i, factor in enumerate(analysis['risk_factors'], 1):
-                print(f"  {i}. {factor}")
-        else:
-            print("✅ No significant risk factors identified")
-        
-        print(f"{'='*60}")
 
 
-# Integration function to be called from email_integration.py
-def analyze_email_domain_and_urls(sender_email, email_body, email_subject=""):
+def analyze_email_domain_and_urls(sender_email: str, email_body: str, 
+                                 email_subject: str = "") -> Dict:
     """
-    Main function to be called from email_integration.py
+    Main function to analyze email domains and URLs for security threats
     
     Args:
-        sender_email (str): Sender's email address
-        email_body (str): Email content
-        email_subject (str): Email subject line
+        sender_email: Sender's email address
+        email_body: Email body text
+        email_subject: Email subject line
         
     Returns:
-        dict: Security analysis results
+        Dictionary with comprehensive analysis results
     """
     detector = DomainURLDetector()
-    return detector.analyze_email_security(sender_email, email_body, email_subject)
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    try:
-        print("Testing Domain & URL Detection System")
-        print("="*50)
+    
+    # Analyze sender domain
+    sender_analysis = detector.analyze_sender_domain(sender_email)
+    
+    # Extract and analyze URLs
+    subject_urls = detector.extract_urls_from_text(email_subject or "")
+    body_urls = detector.extract_urls_from_text(email_body or "")
+    all_urls = list(set(subject_urls + body_urls))
+    
+    # Analyze each URL
+    url_analyses = []
+    suspicious_urls = []
+    total_risk_score = 0
+    
+    for url in all_urls:
+        analysis = detector.analyze_url_suspicious_patterns(url)
+        url_analyses.append(analysis)
+        total_risk_score += analysis['risk_score']
         
-        # Initialize detector
-        detector = DomainURLDetector()
-        
-        # Perform analysis
-        print("Analyzing test email...")
-        #analysis = detector.analyze_email_security(sender, body, subject)
-        
-        # Print results
-        #detector.print_security_analysis(analysis)
-        
-        print("\nTest completed successfully!")
-        
-    except Exception as e:
-        print(f"Error during testing: {e}")
-        import traceback
-        traceback.print_exc()
+        if analysis['is_suspicious']:
+            suspicious_urls.append(analysis)
+    
+    # Calculate overall risk
+    risk_factors = []
+    
+    if sender_analysis['is_suspicious']:
+        risk_factors.extend(sender_analysis.get('reasons', []))
+    
+    if suspicious_urls:
+        risk_factors.append(f"{len(suspicious_urls)} suspicious URLs found")
+    
+    # Determine risk level
+    if total_risk_score >= 5 or len(suspicious_urls) >= 2:
+        risk_level = 'HIGH'
+    elif total_risk_score >= 2 or len(suspicious_urls) >= 1:
+        risk_level = 'MEDIUM'
+    else:
+        risk_level = 'LOW'
+    
+    return {
+        'risk_level': risk_level,
+        'risk_score': total_risk_score,
+        'risk_factors': risk_factors,
+        'sender_analysis': sender_analysis,
+        'urls_found': all_urls,
+        'url_analyses': url_analyses,
+        'suspicious_urls': suspicious_urls,
+        'total_urls_analyzed': len(all_urls),
+        'suspicious_url_count': len(suspicious_urls),
+        'summary': {
+            'sender_suspicious': sender_analysis['is_suspicious'],
+            'urls_found': len(all_urls),
+            'suspicious_urls': len(suspicious_urls),
+            'total_risk_factors': len(risk_factors)
+        }
+    }
