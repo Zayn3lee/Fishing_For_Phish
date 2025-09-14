@@ -80,5 +80,3 @@ class GetData:
             
         # Return if no header is found
         return "No header found"
-    
-    ..

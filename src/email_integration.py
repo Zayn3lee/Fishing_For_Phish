@@ -9,6 +9,7 @@ import base64
 
 # Import data from email
 from get_data import GetData
+from get_data_manual import GetDataManual
 
 # Import keyword detection components
 from keyword_detector import KeywordDetector
@@ -28,6 +29,55 @@ class PhishingEmailAnalyzer:
         self.service = GetData.gmail_service()
         self.keyword_detector = KeywordDetector()
         self.position_scorer = PositionScorer()
+
+    def analyze_manual_email(self):
+        """
+        Analyze a manually inputted email for phishing
+
+        Args:
+            manual_data: inputted data
+            
+        Returns:
+            dict: Complete analysis results
+        """        
+        # In the future, this will be done on the web server itself, not in the console
+        # Get data from text
+        print("Paste your raw email and end with a single line 'EOF'\n")
+        lines = []
+        while True:
+            line = input()
+            if line.strip().upper() == "EOF":
+                break
+            lines.append(line)
+        manual_data = "\n".join(lines)
+
+        # Extract data from the manually inputted email
+        email = GetDataManual.extract_email_info_from_txt(manual_data)
+
+        ## Analysis of email
+        # Perform keyword detection using updated method
+        subject_matches = self.keyword_detector.find_keywords_in_text(email["Subject"], is_subject=True)
+        body_matches = self.keyword_detector.find_keywords_in_text(email["Body"], is_subject=False)
+        all_matches = subject_matches + body_matches
+        
+        # Calculate position-based scores
+        email_length = len(email["Subject"]) + len(email["Body"])
+        scoring_result = self.position_scorer.calculate_comprehensive_score(all_matches, email_length)
+        
+        # Combine results
+        analysis = {
+            'sender': email["From"],
+            'subject': email["Subject"],
+            'body_length': len(email["Body"]),
+            'subject_length': len(email["Subject"]),
+            'total_matches': len(all_matches),
+            'subject_matches': len(subject_matches),
+            'body_matches': len(body_matches),
+            **scoring_result  # Include all scoring results
+        }
+        
+        return analysis
+
 
     
     def analyze_single_email(self, msg_data):
@@ -195,6 +245,9 @@ if __name__ == "__main__":
     # Initialize analyzer
     analyzer = PhishingEmailAnalyzer()
     
+    # Analyze manually inputted emails
+    # analyses = analyzer.analyze_manual_email()
+
     # Analyze recent emails
     analyses = analyzer.analyze_recent_emails(max_results=5)
     
