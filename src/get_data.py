@@ -9,40 +9,57 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 class GetData:
     # Function to login user into their email via localhost:8080
     def gmail_service():
-        creds = None
         flow = InstalledAppFlow.from_client_secrets_file("client_secrets.json", SCOPES)
         creds = flow.run_local_server(port=8080)
         service = build("gmail", "v1", credentials=creds)
         return service
 
-    # Extracts and decodes email
     def get_email_body(msg_data):
         """
-        Extract and decode email body
-        
-        Args:
-            msg_data: Gmail API message data
-            
-        Returns:
-            str: Decoded email body
+        Extract and decode email body (recursive for multipart emails)
+        Skips attachments.
         """
-        payload = msg_data["payload"]
-        
-        # Case 1: Simple email (text/plain utf-8 directly in body)
+        def get_parts_text(parts):
+            for part in parts:
+                mime_type = part.get("mimeType", "")
+                filename = part.get("filename", "")
+                body = part.get("body", {})
+
+                # Skip attachments
+                if filename:
+                    continue
+
+                # If data exists, decode it
+                data = body.get("data")
+                if data:
+                    try:
+                        decoded = base64.urlsafe_b64decode(data).decode("utf-8", errors="ignore")
+                        return decoded
+                    except Exception:
+                        continue
+
+                # Recurse if there are nested parts
+                if "parts" in part:
+                    nested = get_parts_text(part["parts"])
+                    if nested:
+                        return nested
+            return None
+
+        payload = msg_data.get("payload", {})
+
+        # Case 1: simple body at top-level
         if "body" in payload and "data" in payload["body"]:
-            data = payload["body"]["data"]
-            decoded = base64.urlsafe_b64decode(data).decode("utf-8")
-            return decoded
-        
-        # Case 2: Multipart email (text/plain + HTML parts)
-        parts = payload.get("parts", [])
-        for part in parts:
-            if part["mimeType"] in ["text/plain", "text/html"]:
-                data = part["body"]["data"]
-                decoded = base64.urlsafe_b64decode(data).decode("utf-8")
-                return decoded
-        
-        # return if no data found
+            try:
+                return base64.urlsafe_b64decode(payload["body"]["data"]).decode("utf-8", errors="ignore")
+            except Exception:
+                pass
+
+        # Case 2: multipart
+        if "parts" in payload:
+            body_text = get_parts_text(payload["parts"])
+            if body_text:
+                return body_text
+
         return "No data found"
 
     def get_email_subject(msg_data):
@@ -62,7 +79,7 @@ class GetData:
         
         # No subject found
         return "No subject found"  
-    
+
     def get_email_sender(msg_data):
         """
         Extract sender information from Gmail API message data

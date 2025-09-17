@@ -18,6 +18,9 @@ from position_scorer import PositionScorer
 # Import domain/URL detection - ADD THIS LINE
 from distancechecker import analyze_email_domain_and_urls
 
+# Import attachment analyzer
+from attachment_analyzer import AttachmentRiskAnalyzer
+
 # Gmail API scopes required
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
@@ -31,6 +34,7 @@ class PhishingEmailAnalyzer:
         self.service = GetData.gmail_service()
         self.keyword_detector = KeywordDetector()
         self.position_scorer = PositionScorer()
+        self.attachment_analyzer = AttachmentRiskAnalyzer()
         # Remove the distance_checker line since we're using the function directly
 
     def analyze_manual_email(self):
@@ -120,6 +124,19 @@ class PhishingEmailAnalyzer:
             email_body=body,
             email_subject=subject
         )
+
+        # 🔹 NEW: Extract Gmail attachments
+        raw_attachments = self.attachment_analyzer.extract_gmail_attachments(msg_data)
+
+        # 🔹 NEW: Download attachment contents
+        parsed_attachments = self.attachment_analyzer.parse_gmail_attachment_data(
+            self.service, msg_data["id"], raw_attachments
+        )
+
+        # 🔹 NEW: Analyze attachments
+        attachment_results = self.attachment_analyzer.analyze_attachments(
+            parsed_attachments, subject, body
+        )
         
         # Combine results
         analysis = {
@@ -131,6 +148,7 @@ class PhishingEmailAnalyzer:
             'subject_matches': len(subject_matches),
             'body_matches': len(body_matches),
             'domain_url_analysis': domain_url_analysis,  # ADD THIS
+            'attachment_results': attachment_results,
             **scoring_result  # Include all scoring results
         }
         
@@ -237,6 +255,15 @@ class PhishingEmailAnalyzer:
             for match in sorted_matches[:3]:  # Show top 3
                 location = "SUBJECT" if match['zone'] == 'subject' else "BODY"
                 print(f"  '{match['keyword']}' ({match['category']}) in {location} - Score: {match['final_score']}")
+        
+        # Display attachment analysis
+        if analysis.get('attachment_results'):
+            print("ATTACHMENT ANALYSIS:")
+            for att in analysis['attachment_results']:
+                print(f"  File: {att['filename']} | Suspicious: {att['is_suspicious']}")
+                if att['risk_factors']:
+                    print(f"    Risk Factors: {', '.join(att['risk_factors'])}")
+
         
         print(f"\n{'='*60}\n")
     

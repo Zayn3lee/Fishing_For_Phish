@@ -1,5 +1,5 @@
 '''
-This file extracts data from manually inserted emails into our program isntead of from the Gmail service
+This file extracts data from manually inserted emails into our program instead of from the Gmail service
 '''
 
 from email import policy
