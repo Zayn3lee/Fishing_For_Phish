@@ -29,13 +29,23 @@ class PhishingEmailAnalyzer:
     Complete phishing email analyzer integrating Gmail API with keyword detection
     """
     
-    def __init__(self):
+    def __init__(self, service=None):
         """Initialize Gmail service and keyword detection components"""
-        self.service = GetData.gmail_service()
+        self.service = None
         self.keyword_detector = KeywordDetector()
         self.position_scorer = PositionScorer()
         self.attachment_analyzer = AttachmentRiskAnalyzer()
         # Remove the distance_checker line since we're using the function directly
+
+    def initialize_service(self):
+        """Run Gmail OAuth only once when Flask calls it"""
+        if not self.service:
+            self.service = GetData.gmail_service()
+
+    def analyze_emails(self, max_results=5):
+        if not self.service:
+            raise Exception("Gmail service not initialized. Call initialize_service() first.")
+        return self.analyze_recent_emails(max_results)
 
     def analyze_manual_email(self):
         """
@@ -304,8 +314,13 @@ class PhishingEmailAnalyzer:
             'highest_score': max(a['total_score'] for a in analyses),
             'most_suspicious_email': max(analyses, key=lambda x: x['total_score'])
         }
+    
+    
 
 # Example usage
+"""
+Uncomment this to see the summary analysis on the terminal. 
+
 if __name__ == "__main__":
     # Initialize analyzer
     analyzer = PhishingEmailAnalyzer()
@@ -337,3 +352,5 @@ if __name__ == "__main__":
         print(f"  Subject: {most_suspicious['subject']}")
         print(f"  Score: {most_suspicious['total_score']}")
         print(f"  Risk Level: {most_suspicious['risk_level']}")
+
+"""

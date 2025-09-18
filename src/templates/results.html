@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Email Analysis Results</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Email Analysis Summary</h1>
+
+        <h2>Summary</h2>
+        <ul>
+            <li>Total Emails Analyzed: {{ summary.total_emails_analyzed }}</li>
+            <li>High Risk Emails: {{ summary.high_risk_emails }}</li>
+            <li>Medium Risk Emails: {{ summary.medium_risk_emails }}</li>
+            <li>Suspicious Emails: {{ summary.suspicious_emails }}</li>
+            <li>Domain High Risk Emails: {{ summary.domain_high_risk_emails }}</li>
+            <li>Total Suspicious URLs Found: {{ summary.total_suspicious_urls }}</li>
+            <li>Average Keyword Score: {{ summary.average_keyword_score }}</li>
+            <li>Highest Score: {{ summary.highest_score }}</li>
+        </ul>
+
+        <h2>Most Suspicious Email</h2>
+        {% if summary.most_suspicious_email %}
+            <p>Subject: {{ summary.most_suspicious_email.subject }}</p>
+            <p>Score: {{ summary.most_suspicious_email.total_score }}</p>
+            <p>Risk Level: {{ summary.most_suspicious_email.risk_level }}</p>
+        {% endif %}
+
+        <h2>All Emails</h2>
+        {% for email in analyses %}
+            <hr>
+            <p><strong>From:</strong> {{ email.sender }}</p>
+            <p><strong>Subject:</strong> {{ email.subject }}</p>
+            <p><strong>Body Length:</strong> {{ email.body_length }}</p>
+            <p><strong>Total Keywords Found:</strong> {{ email.total_matches }}</p>
+            <p><strong>Risk Level:</strong> {{ email.risk_level }}</p>
+
+            {% if email.domain_url_analysis %}
+                <h4>Domain/URL Analysis:</h4>
+                <ul>
+                    <li>Risk Level: {{ email.domain_url_analysis.risk_level }}</li>
+                    <li>Risk Score: {{ email.domain_url_analysis.risk_score }}</li>
+                    <li>Suspicious URLs: {{ email.domain_url_analysis.suspicious_url_count }}</li>
+                    <li>Risk Factors: {{ email.domain_url_analysis.risk_factors | join(', ') }}</li>
+                </ul>
+            {% endif %}
+
+            {% if email.attachment_results %}
+                <h4>Attachment Analysis:</h4>
+                <ul>
+                    {% for att in email.attachment_results %}
+                        <li>{{ att.filename }} - Suspicious: {{ att.is_suspicious }}
+                            {% if att.risk_factors %}
+                                (Risk Factors: {{ att.risk_factors | join(', ') }})
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endfor %}
+    </div>
+</body>
+</html>
