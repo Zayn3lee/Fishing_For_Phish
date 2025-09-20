@@ -2,55 +2,135 @@ import os
 import io
 import zipfile
 import base64
+import re
 from typing import List, Dict
 
 class AttachmentRiskAnalyzer:
     def __init__(self):
-        self.high_risk_ext = {".exe", ".scr", ".bat", ".js", ".vbs"}
-        self.archive_ext = {".zip"}
+        self.high_risk_ext = {".exe", ".scr", ".bat", ".js", ".vbs", ".com", ".pif", ".cmd"}
+        self.archive_ext = {".zip", ".rar", ".7z", ".tar", ".gz"}
         self.office_ext = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".docm", ".xlsm", ".pptm"}
+        
+        # Enhanced: Patterns for obviously malicious filenames
+        self.malicious_patterns = [
+            r'malware', r'virus', r'trojan', r'keylogger', r'ransomware',
+            r'payload', r'exploit', r'backdoor', r'rootkit', r'spyware',
+            r'test.*malware', r'fake.*', r'phish.*', r'scam.*',
+            r'crack', r'keygen', r'serial', r'loader', r'injector',
+            r'bypass', r'hack.*tool', r'password.*steal', r'data.*steal'
+        ]
+        
+        # Suspicious filename patterns
+        self.suspicious_patterns = [
+            r'urgent.*invoice', r'payment.*due', r'account.*suspended',
+            r'security.*update', r'important.*document', r'confidential.*file',
+            r'[0-9]{10,}\.exe',  # Random number executable
+            r'document\d*\.exe',  # Document.exe type files
+            r'photo\d*\.exe',     # Photo.exe type files
+            r'\.pdf\.exe$',       # Double extension
+            r'\.jpg\.exe$',       # Double extension
+            r'\.doc\.exe$'        # Double extension
+        ]
 
     def analyze_attachment(self, filename: str, content: bytes, email_subject: str = "", email_body: str = "") -> Dict:
         ext = os.path.splitext(filename)[1].lower()
         risk_factors = []
-
+        filename_lower = filename.lower()
+        
+        # Check for obviously malicious filenames FIRST
+        is_obviously_malicious = False
+        for pattern in self.malicious_patterns:
+            if re.search(pattern, filename_lower):
+                risk_factors.append(f"CRITICAL: Filename contains malware indicators: '{filename}'")
+                is_obviously_malicious = True
+                break
+        
+        # Check for suspicious filename patterns
+        if not is_obviously_malicious:
+            for pattern in self.suspicious_patterns:
+                if re.search(pattern, filename_lower):
+                    risk_factors.append(f"Suspicious filename pattern: {filename}")
+                    break
+        
+        # Check file extension risks
         if ext in self.high_risk_ext:
-            risk_factors.append(f"High-risk extension: {ext}")
+            if is_obviously_malicious:
+                risk_factors.append(f"CRITICAL: High-risk executable extension with malicious name")
+            else:
+                risk_factors.append(f"High-risk extension: {ext}")
 
+        # Context mismatch analysis (enhanced)
         subject_body = (email_subject or "") + " " + (email_body or "")
         subject_body_lower = subject_body.lower()
-        if any(b in subject_body_lower for b in ["bank", "paypal", "account"]) and ext in self.high_risk_ext:
-            risk_factors.append("Context mismatch: sensitive sender/context with risky attachment")
+        
+        # More sophisticated context analysis
+        financial_keywords = ["bank", "paypal", "payment", "invoice", "receipt", "account"]
+        security_keywords = ["security", "urgent", "suspended", "verify", "confirm"]
+        
+        has_financial_context = any(keyword in subject_body_lower for keyword in financial_keywords)
+        has_security_context = any(keyword in subject_body_lower for keyword in security_keywords)
+        
+        if (has_financial_context or has_security_context) and ext in self.high_risk_ext:
+            risk_factors.append("CRITICAL: Context mismatch - financial/security email with executable attachment")
 
+        # Archive analysis
         if ext in self.archive_ext:
             try:
-                with zipfile.ZipFile(io.BytesIO(content)) as z:
-                    for n in z.namelist():
-                        ne = os.path.splitext(n)[1].lower()
-                        if ne in self.high_risk_ext:
-                            risk_factors.append(f"Dangerous file inside archive: {n}")
+                if ext == ".zip":
+                    with zipfile.ZipFile(io.BytesIO(content)) as z:
+                        for name in z.namelist():
+                            nested_ext = os.path.splitext(name)[1].lower()
+                            nested_name = name.lower()
+                            
+                            # Check for malicious files inside archive
+                            if any(re.search(pattern, nested_name) for pattern in self.malicious_patterns):
+                                risk_factors.append(f"CRITICAL: Malicious file inside archive: {name}")
+                            elif nested_ext in self.high_risk_ext:
+                                risk_factors.append(f"High-risk executable inside archive: {name}")
+                            elif any(re.search(pattern, nested_name) for pattern in self.suspicious_patterns):
+                                risk_factors.append(f"Suspicious file inside archive: {name}")
             except Exception:
-                risk_factors.append("Could not inspect ZIP contents")
+                risk_factors.append("Could not inspect archive contents - potentially corrupted or protected")
 
+        # Office document macro detection (enhanced)
         if ext in self.office_ext:
             try:
                 text = content.decode(errors="ignore")
-                if "vba" in text.lower() or "vbproject" in text.lower() or "sub autoopen" in text.lower():
-                    risk_factors.append("Possible macro detected in Office document")
+                macro_indicators = [
+                    "vba", "vbproject", "sub autoopen", "auto_open", "workbook_open",
+                    "document_open", "shell", "createobject", "wscript", "powershell"
+                ]
+                
+                found_indicators = [indicator for indicator in macro_indicators if indicator in text.lower()]
+                if found_indicators:
+                    risk_factors.append(f"Possible macro detected: {', '.join(found_indicators[:3])}")
             except Exception:
                 pass
+        
+        # Enhanced suspicious scoring
+        is_suspicious = len(risk_factors) > 0 or is_obviously_malicious
+        
+        # Override for obvious malware - always mark as suspicious
+        if is_obviously_malicious:
+            is_suspicious = True
 
         return {
             "filename": filename,
             "extension": ext,
-            "is_suspicious": len(risk_factors) > 0,
-            "risk_factors": risk_factors
+            "is_suspicious": is_suspicious,
+            "risk_factors": risk_factors,
+            "is_obviously_malicious": is_obviously_malicious
         }
 
     def analyze_attachments(self, attachments: List[Dict], email_subject: str = "", email_body: str = "") -> List[Dict]:
         results = []
         for att in attachments:
-            res = self.analyze_attachment(att.get("filename", ""), att.get("content", b""), email_subject, email_body)
+            res = self.analyze_attachment(
+                att.get("filename", ""), 
+                att.get("content", b""), 
+                email_subject, 
+                email_body
+            )
             results.append(res)
         return results
 

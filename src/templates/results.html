@@ -1,64 +1,213 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Email Analysis Results</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>Email Security Analysis Results</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* Aggressive URL overflow fixes */
+        .url-container {
+            word-break: break-all;
+            overflow-wrap: anywhere;
+            max-width: 100%;
+            white-space: normal;
+            overflow: hidden;
+        }
+        
+        .url-text {
+            font-family: monospace;
+            font-size: 11px;
+            background: #f5f5f5;
+            padding: 4px 6px;
+            border-radius: 3px;
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            word-break: break-all;
+            overflow-wrap: anywhere;
+            white-space: normal;
+            box-sizing: border-box;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        /* Alternative: Truncate very long URLs */
+        .url-truncated {
+            font-family: monospace;
+            font-size: 11px;
+            background: #f5f5f5;
+            padding: 4px 6px;
+            border-radius: 3px;
+            display: block;
+            width: 100%;
+            max-width: 100%;
+            box-sizing: border-box;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .link-details {
+            margin: 10px 0;
+            padding: 10px;
+            background: #fafafa;
+            border-left: 3px solid #ddd;
+            overflow: hidden;
+        }
+        
+        .link-details ul {
+            list-style-type: none;
+            padding-left: 0;
+        }
+        
+        .link-details li {
+            margin-bottom: 10px;
+            padding: 8px;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #eee;
+        }
+        
+        .url-label {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        
+        .url-issues {
+            color: #d32f2f;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+        
+        .url-risk {
+            color: #f57c00;
+            font-weight: bold;
+            float: right;
+        }
+        
+        /* Container improvements */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        /* Responsive improvements */
+        @media (max-width: 768px) {
+            .url-text {
+                font-size: 10px;
+            }
+            
+            .container {
+                padding: 10px;
+            }
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <h1>Email Analysis Summary</h1>
-
-        <h2>Summary</h2>
-        <ul>
-            <li>Total Emails Analyzed: {{ summary.total_emails_analyzed }}</li>
-            <li>High Risk Emails: {{ summary.high_risk_emails }}</li>
-            <li>Medium Risk Emails: {{ summary.medium_risk_emails }}</li>
-            <li>Suspicious Emails: {{ summary.suspicious_emails }}</li>
-            <li>Domain High Risk Emails: {{ summary.domain_high_risk_emails }}</li>
-            <li>Total Suspicious URLs Found: {{ summary.total_suspicious_urls }}</li>
-            <li>Average Keyword Score: {{ summary.average_keyword_score }}</li>
-            <li>Highest Score: {{ summary.highest_score }}</li>
-        </ul>
-
-        <h2>Most Suspicious Email</h2>
-        {% if summary.most_suspicious_email %}
-            <p>Subject: {{ summary.most_suspicious_email.subject }}</p>
-            <p>Score: {{ summary.most_suspicious_email.total_score }}</p>
-            <p>Risk Level: {{ summary.most_suspicious_email.risk_level }}</p>
+        <h1>Email Security Analysis Results</h1>
+        
+        {% if summary %}
+        <h2>Analysis Summary</h2>
+        <p><strong>Total Emails Analyzed:</strong> {{ summary.total_emails_analyzed }}</p>
+        <p><strong>High Risk Emails:</strong> {{ summary.high_risk_emails }}</p>
+        <p><strong>Medium Risk Emails:</strong> {{ summary.medium_risk_emails }}</p>
+        <p><strong>Average Keyword Score:</strong> {{ summary.average_keyword_score }}</p>
         {% endif %}
-
-        <h2>All Emails</h2>
-        {% for email in analyses %}
-            <hr>
-            <p><strong>From:</strong> {{ email.sender }}</p>
-            <p><strong>Subject:</strong> {{ email.subject }}</p>
-            <p><strong>Body Length:</strong> {{ email.body_length }}</p>
-            <p><strong>Total Keywords Found:</strong> {{ email.total_matches }}</p>
-            <p><strong>Risk Level:</strong> {{ email.risk_level }}</p>
-
-            {% if email.domain_url_analysis %}
-                <h4>Domain/URL Analysis:</h4>
-                <ul>
-                    <li>Risk Level: {{ email.domain_url_analysis.risk_level }}</li>
-                    <li>Risk Score: {{ email.domain_url_analysis.risk_score }}</li>
-                    <li>Suspicious URLs: {{ email.domain_url_analysis.suspicious_url_count }}</li>
-                    <li>Risk Factors: {{ email.domain_url_analysis.risk_factors | join(', ') }}</li>
-                </ul>
-            {% endif %}
-
-            {% if email.attachment_results %}
-                <h4>Attachment Analysis:</h4>
-                <ul>
-                    {% for att in email.attachment_results %}
-                        <li>{{ att.filename }} - Suspicious: {{ att.is_suspicious }}
-                            {% if att.risk_factors %}
-                                (Risk Factors: {{ att.risk_factors | join(', ') }})
-                            {% endif %}
-                        </li>
-                    {% endfor %}
-                </ul>
-            {% endif %}
+        
+        {% for analysis in analyses %}
+        <h2>Email {{ loop.index }}</h2>
+        
+        <h4>Basic Information</h4>
+        <p><strong>From:</strong> {{ analysis.sender }}</p>
+        <p><strong>Subject:</strong> {{ analysis.subject }}</p>
+        <p><strong>Body Length:</strong> {{ analysis.body_length }} characters</p>
+        
+        <h4>Risk Assessment</h4>
+        <p><strong>Risk Level:</strong> {{ analysis.risk_level }}</p>
+        <p><strong>Total Score:</strong> {{ analysis.total_score }}</p>
+        <p><strong>Keywords Found:</strong> {{ analysis.total_matches }}</p>
+        <p><strong>Subject Matches:</strong> {{ analysis.subject_matches }}</p>
+        <p><strong>Body Matches:</strong> {{ analysis.body_matches }}</p>
+        
+        <!-- Enhanced Link/URL Analysis -->
+        {% if analysis.link_risk and analysis.link_risk.has_links %}
+        <h4>Link/URL Analysis</h4>
+        <p><strong>Link Risk Level:</strong> {{ analysis.link_risk.link_risk_level }}</p>
+        <p><strong>Link Risk Score:</strong> {{ analysis.link_risk.link_risk_score }}</p>
+        <p><strong>Total Links:</strong> {{ analysis.link_risk.total_links }}</p>
+        <p><strong>Suspicious Links:</strong> {{ analysis.link_risk.suspicious_link_count }}</p>
+        
+        {% if analysis.link_risk.link_details %}
+        <div class="link-details">
+            <p><strong>Link Details:</strong></p>
+            <ul>
+                {% for detail in analysis.link_risk.link_details %}
+                {% if detail.type == 'url' %}
+                <li>
+                    <div class="url-label">URL:</div>
+                    <div class="url-container">
+                        {% if detail.url|length > 80 %}
+                            <!-- Truncate very long URLs -->
+                            <span class="url-truncated" title="{{ detail.url }}">{{ detail.url[:80] }}...</span>
+                        {% else %}
+                            <!-- Show full URL for shorter ones -->
+                            <span class="url-text">{{ detail.url }}</span>
+                        {% endif %}
+                        <span class="url-risk">{{ detail.risk_level }} RISK</span>
+                    </div>
+                    <div class="url-issues">
+                        <strong>Issues:</strong> {{ detail.description }}
+                    </div>
+                </li>
+                {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% endif %}
+        
+        <!-- Enhanced Attachment Analysis -->
+        {% if analysis.attachment_risk and analysis.attachment_risk.has_attachments %}
+        <h4>Attachment Analysis</h4>
+        <p><strong>Attachment Risk Level:</strong> {{ analysis.attachment_risk.attachment_risk_level }}</p>
+        <p><strong>Attachment Risk Score:</strong> {{ analysis.attachment_risk.attachment_risk_score }}</p>
+        <p><strong>Total Attachments:</strong> {{ analysis.attachment_risk.total_attachments }}</p>
+        <p><strong>Suspicious Attachments:</strong> {{ analysis.attachment_risk.suspicious_attachment_count }}</p>
+        
+        <div class="link-details">
+            <p><strong>Attachment Details:</strong></p>
+            <ul>
+                {% for attachment in analysis.attachment_results %}
+                <li>
+                    <div class="url-label">{{ attachment.filename }}</div>
+                    {% if attachment.is_suspicious %}
+                        <span class="url-risk" style="color: #d32f2f;">SUSPICIOUS</span>
+                        {% if attachment.risk_factors %}
+                        <div class="url-issues">
+                            {% for factor in attachment.risk_factors %}
+                            <div>• {{ factor }}</div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    {% else %}
+                        <span class="url-risk" style="color: #4caf50;">SAFE</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        
+        {% if analysis.category_scores %}
+        <h4>Suspicious Categories</h4>
+        {% for category, score in analysis.category_scores.items() %}
+        <p><strong>{{ category.title() }}:</strong> {{ "%.1f"|format(score) }}</p>
+        {% endfor %}
+        {% endif %}
+        
+        <hr>
         {% endfor %}
     </div>
 </body>
