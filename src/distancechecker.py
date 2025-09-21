@@ -105,6 +105,9 @@ class DomainURLDetector:
             r'https?://[^\s<>"\'\[\]{}]+',
             r'www\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s<>"\'\[\]{}]*)?',
             r'(?<!@)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s<>"\'\[\]{}]*)?',
+            # Add pattern to catch IP addresses as URLs
+            r'https?://(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:/[^\s<>"\'\[\]{}]*)?',
+            r'(?<!@)(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:/[^\s<>"\'\[\]{}]*)?'
         ]
         
         urls = set()
@@ -130,13 +133,27 @@ class DomainURLDetector:
         return url if url else None
     
     def _is_valid_url(self, url: str) -> bool:
-        """Basic URL validation"""
+        """Basic URL validation - Updated to handle IP addresses"""
         if not url or len(url) < 4:
             return False
-        if '.' not in url:
-            return False
+            
+        # Shouldn't contain spaces
         if ' ' in url:
             return False
+        
+        # Check if it's an IP address URL
+        if re.match(r'^https?://(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)', url):
+            return True
+        
+        # Check if it's a bare IP address
+        if re.match(r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)', url):
+            return True
+            
+        # Must contain a dot for domain
+        if '.' not in url:
+            return False
+            
+        # Should look like a reasonable URL
         return bool(re.match(r'^(https?://|www\.)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', url))
     
     def analyze_url_suspicious_patterns(self, url: str) -> Dict:
@@ -242,10 +259,12 @@ class DomainURLDetector:
         if not domain:
             return False
         try:
+            # Handle both IPv4 and IPv6
             ipaddress.ip_address(domain)
             return True
         except ValueError:
-            return False
+            # Also check if it matches IP pattern with regex as backup
+            ipv4_pattern = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)'
     
     def _create_analysis_result(self, is_suspicious: bool, reasons: List[str], 
                               url: str, domain: str) -> Dict:
@@ -394,3 +413,4 @@ def analyze_email_domain_and_urls(sender_email: str, email_body: str,
             'total_risk_factors': len(risk_factors)
         }
     }
+

@@ -620,7 +620,7 @@ def main():
     if len(sys.argv) > 1:
         # Command line mode
         if sys.argv[1] == '--help' or sys.argv[1] == '-h':
-            print("🛡️ SIMPLE EMAIL ANALYZER")
+            print(" SIMPLE EMAIL ANALYZER")
             print("=" * 30)
             print("Usage:")
             print("  python email_checker_script.py                    # Interactive mode")
