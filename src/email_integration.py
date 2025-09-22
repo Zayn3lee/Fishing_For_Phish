@@ -1,5 +1,6 @@
 """
 Complete Gmail API Integration using your existing distancechecker.py
+Enhanced with improved risk assessment for legitimate vs fraudulent emails
 """
 
 from google.oauth2.credentials import Credentials
@@ -29,6 +30,7 @@ SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 class PhishingEmailAnalyzer:
     """
     Complete phishing email analyzer using your existing systems
+    Enhanced with better legitimate vs fraudulent detection
     """
     
     def __init__(self, service=None):
@@ -45,12 +47,36 @@ class PhishingEmailAnalyzer:
         self.keyword_categories = SuspiciousKeywords.get_keyword_categories()
         self.category_weights = SuspiciousKeywords.get_category_weights()
         
+        # Enhanced trusted domains - more comprehensive list
+        self.highly_trusted_domains = {
+            'gmail.com', 'google.com', 'accounts.google.com', 
+            'security.google.com', 'support.google.com', 'googlemail.com',
+            'microsoft.com', 'outlook.com', 'live.com', 'hotmail.com',
+            'apple.com', 'icloud.com', 'me.com', 'mac.com',
+            'paypal.com', 'paypal-communications.com',
+            'amazonses.com', 'amazon.com', 'amazon.co.uk',
+            'facebook.com', 'meta.com', 'instagram.com',
+            'twitter.com', 'x.com', 'linkedin.com',
+            'github.com', 'stackoverflow.com'
+        }
+        
         # Security notification patterns for context
         self.security_patterns = [
             r'security alert', r'new sign-?in', r'login from', r'new device',
             r'unusual activity', r'password changed', r'two-?factor',
             r'verification code', r'account activity', r'suspicious activity',
             r'access granted', r'permission granted', r'allowed.*access'
+        ]
+        
+        # Obvious scam patterns that should INCREASE risk for anonymous senders
+        self.obvious_scam_patterns = [
+            r'free money', r'you.*won', r'claim.*prize', r'lottery.*winner',
+            r'inherit.*million', r'nigerian prince', r'deceased.*relative',
+            r'lottery.*notification', r'congratulations.*winner', r'selected.*beneficiary',
+            r'transfer.*funds', r'business.*proposal', r'urgent.*assistance',
+            r'confidential.*transaction', r'next.*of.*kin', r'beneficiary.*fund',
+            r'claim.*\$\d+', r'won.*\$\d+', r'prize.*\$\d+', r'millions.*dollars',
+            r'inheritance.*fund', r'trust.*fund.*transfer', r'cash.*prize.*claim'
         ]
 
     def initialize_service(self):
@@ -63,9 +89,115 @@ class PhishingEmailAnalyzer:
             raise Exception("Gmail service not initialized. Call initialize_service() first.")
         return self.analyze_recent_emails(max_results)
 
+    def is_highly_trusted_sender(self, sender_email):
+        """Check if sender is from a highly trusted domain"""
+        if not sender_email or '@' not in sender_email:
+            return False
+        
+        domain = sender_email.split('@')[1].lower()
+        return domain in self.highly_trusted_domains
+
     def is_trusted_sender(self, sender_email):
         """Use your distancechecker's legitimate domain logic"""
         return self.domain_detector.analyze_sender_domain(sender_email).get('is_suspicious') == False
+
+    def calculate_sender_trust_score(self, sender_email):
+        """Calculate trust score based on sender characteristics"""
+        if not sender_email:
+            return 0
+        
+        # Highly trusted domains get maximum trust
+        if self.is_highly_trusted_sender(sender_email):
+            return 100
+        
+        # Known legitimate domains get high trust
+        if self.is_trusted_sender(sender_email):
+            return 80
+        
+        # Check for suspicious sender patterns
+        domain = sender_email.split('@')[1].lower() if '@' in sender_email else ''
+        
+        # Suspicious characteristics
+        trust_score = 50  # Neutral starting point
+        
+        # Reduce trust for suspicious domain patterns
+        if re.search(r'\d{3,}', domain):  # Many numbers in domain
+            trust_score -= 20
+        
+        if len(domain.split('.')) > 3:  # Too many subdomains
+            trust_score -= 15
+        
+        if re.search(r'(temp|fake|test|spam)', domain):
+            trust_score -= 30
+        
+        return max(0, trust_score)
+
+    def enhanced_google_security_detection(self, sender_email, subject, body):
+        """Specific detection for Google security notifications"""
+        if not sender_email:
+            return False
+        
+        # Check if it's from Google
+        google_domains = ['gmail.com', 'google.com', 'accounts.google.com', 'security.google.com']
+        sender_domain = sender_email.split('@')[1].lower() if '@' in sender_email else ''
+        
+        if sender_domain not in google_domains:
+            return False
+        
+        # Check for legitimate Google security patterns
+        combined_text = f"{subject} {body}".lower()
+        
+        google_security_patterns = [
+            r'google.*security.*alert',
+            r'new.*sign.*in.*to.*your.*google.*account',
+            r'security.*activity.*on.*your.*google.*account',
+            r'new.*device.*sign.*in',
+            r'review.*your.*account.*activity',
+            r'google.*account.*security.*checkup',
+            r'sign.*in.*blocked.*on.*your.*google.*account',
+            r'someone.*just.*used.*your.*password'
+        ]
+        
+        for pattern in google_security_patterns:
+            if re.search(pattern, combined_text):
+                return True
+        
+        return False
+
+    def detect_obvious_financial_scams(self, subject, body, sender_email):
+        """Detect obvious financial scam patterns that should be HIGH risk"""
+        combined_text = f"{subject} {body}".lower()
+        
+        # Get sender trust level
+        sender_trust = self.calculate_sender_trust_score(sender_email)
+        
+        scam_count = 0
+        matched_patterns = []
+        
+        for pattern in self.obvious_scam_patterns:
+            if re.search(pattern, combined_text):
+                scam_count += 1
+                matched_patterns.append(pattern)
+        
+        # If low-trust sender + scam patterns = definite high risk
+        if sender_trust < 60 and scam_count > 0:
+            return {
+                'is_obvious_scam': True,
+                'scam_score_boost': scam_count * 25,  # 25 points per pattern
+                'matched_patterns': matched_patterns
+            }
+        elif scam_count > 0:
+            return {
+                'is_obvious_scam': True,
+                'scam_score_boost': scam_count * 15,  # 15 points for unknown senders
+                'matched_patterns': matched_patterns
+            }
+        
+        return {
+            'is_obvious_scam': False,
+            'scam_score_boost': 0,
+            'matched_patterns': []
+        }
 
     def is_legitimate_security_notification(self, subject, body, sender_email):
         """Check if this is a legitimate security notification"""
@@ -237,6 +369,73 @@ class PhishingEmailAnalyzer:
             'sender_suspicious': domain_url_analysis.get('sender_analysis', {}).get('is_suspicious', False)
         }
 
+    def enhanced_risk_calculation(self, sender_email, subject, body, keyword_score, 
+                                attachment_score, link_score):
+        """Enhanced risk calculation with better context awareness"""
+        
+        # Get trust score
+        sender_trust = self.calculate_sender_trust_score(sender_email)
+        
+        # Check for legitimate security notification
+        is_security_notif = self.is_legitimate_security_notification(subject, body, sender_email)
+        is_google_security = self.enhanced_google_security_detection(sender_email, subject, body)
+        
+        # Check for obvious scam language
+        scam_detection = self.detect_obvious_financial_scams(subject, body, sender_email)
+        
+        # Base total score
+        total_score = keyword_score + attachment_score + link_score
+        
+        # Apply trust-based adjustments
+        if is_google_security or (sender_trust >= 95 and is_security_notif):
+            # Highly trusted + security notification: massive reduction
+            adjusted_score = total_score * 0.05  # 95% reduction
+            risk_level = 'MINIMAL'
+            adjustment_reason = "Legitimate security notification from highly trusted sender"
+            
+        elif sender_trust >= 80 and is_security_notif:
+            # Trusted + security notification: large reduction
+            adjusted_score = total_score * 0.15  # 85% reduction
+            risk_level = 'LOW' if adjusted_score > 10 else 'MINIMAL'
+            adjustment_reason = "Security notification from trusted sender"
+            
+        elif sender_trust >= 80:
+            # Trusted sender: moderate reduction
+            adjusted_score = total_score * 0.4  # 60% reduction
+            adjustment_reason = "Trusted sender"
+            
+        else:
+            # No trust-based adjustments yet
+            adjusted_score = total_score
+            adjustment_reason = "Standard risk assessment"
+        
+        # Apply scam detection boost
+        if scam_detection['is_obvious_scam']:
+            adjusted_score += scam_detection['scam_score_boost']
+            adjustment_reason = f"Obvious financial scam detected: {', '.join(scam_detection['matched_patterns'][:2])}"
+        
+        # Determine final risk level
+        if adjusted_score >= 60:
+            risk_level = 'HIGH'
+        elif adjusted_score >= 30:
+            risk_level = 'MEDIUM'
+        elif adjusted_score >= 10:
+            risk_level = 'LOW'
+        else:
+            risk_level = 'MINIMAL'
+        
+        return {
+            'adjusted_score': round(adjusted_score, 2),
+            'risk_level': risk_level,
+            'original_score': total_score,
+            'sender_trust_score': sender_trust,
+            'is_security_notification': is_security_notif,
+            'is_google_security': is_google_security,
+            'scam_patterns_found': scam_detection['matched_patterns'],
+            'adjustment_reason': adjustment_reason,
+            'scam_score_boost': scam_detection['scam_score_boost']
+        }
+
     def analyze_manual_email(self):
         """Analyze manually inputted email using your existing systems"""
         print("Paste your raw email and end with a single line 'EOF'\n")
@@ -284,10 +483,6 @@ class PhishingEmailAnalyzer:
         body = GetData.get_email_body(msg_data)
         sender = GetData.get_email_sender(msg_data)
         
-        # Check context using your systems
-        is_trusted = self.is_trusted_sender(sender)
-        is_security_notification = self.is_legitimate_security_notification(subject, body, sender)
-        
         # Use your existing keyword detection system
         subject_matches = self.keyword_detector.find_keywords_in_text(subject, is_subject=True)
         body_matches = self.keyword_detector.find_keywords_in_text(body, is_subject=False)
@@ -295,23 +490,6 @@ class PhishingEmailAnalyzer:
         
         email_length = len(subject) + len(body)
         scoring_result = self.position_scorer.calculate_comprehensive_score(all_matches, email_length)
-        
-        # Apply smart keyword adjustment
-        original_keyword_score = scoring_result['total_score']
-        if is_trusted and is_security_notification:
-            adjusted_keyword_score = original_keyword_score * 0.1  # 90% reduction
-            adjusted_risk_level = 'MINIMAL'
-        elif is_trusted:
-            adjusted_keyword_score = original_keyword_score * 0.5  # 50% reduction
-            if adjusted_keyword_score >= 25:
-                adjusted_risk_level = 'MEDIUM'
-            elif adjusted_keyword_score >= 10:
-                adjusted_risk_level = 'LOW'
-            else:
-                adjusted_risk_level = 'MINIMAL'
-        else:
-            adjusted_keyword_score = original_keyword_score
-            adjusted_risk_level = scoring_result['risk_level']
         
         # Use your enhanced domain/URL analysis
         domain_url_analysis = self.smart_domain_url_analysis(sender, body, subject)
@@ -329,29 +507,15 @@ class PhishingEmailAnalyzer:
         attachment_risk = self.calculate_attachment_risk_score(attachment_results)
         link_risk = self.calculate_link_risk_score(domain_url_analysis, sender, subject, body)
         
-        # Combine all scoring systems
-        keyword_score = adjusted_keyword_score
-        attachment_score = attachment_risk['attachment_risk_score']
-        link_score = link_risk['link_risk_score']
+        # NEW: Use enhanced risk calculation
+        enhanced_risk = self.enhanced_risk_calculation(
+            sender, subject, body,
+            scoring_result['total_score'],
+            attachment_risk['attachment_risk_score'],
+            link_risk['link_risk_score']
+        )
         
-        total_risk_score = keyword_score + attachment_score + link_score
-        
-        # Determine combined risk level
-        if total_risk_score >= 80:
-            combined_risk_level = 'HIGH'
-        elif total_risk_score >= 40:
-            combined_risk_level = 'MEDIUM'
-        elif total_risk_score >= 15:
-            combined_risk_level = 'LOW'
-        else:
-            combined_risk_level = 'MINIMAL'
-        
-        # STRONG override for legitimate security notifications
-        if is_trusted and is_security_notification:
-            combined_risk_level = 'MINIMAL'
-            total_risk_score = min(total_risk_score, 5)  # Cap the score
-        
-        # Combine all results
+        # Combine all results with enhanced scoring
         analysis = {
             'sender': sender,
             'subject': subject,
@@ -364,13 +528,19 @@ class PhishingEmailAnalyzer:
             'attachment_results': attachment_results,
             'attachment_risk': attachment_risk,
             'link_risk': link_risk,
-            'combined_risk_score': total_risk_score,
-            'combined_risk_level': combined_risk_level,
-            'is_trusted_sender': is_trusted,
-            'is_security_notification': is_security_notification,
-            'adjusted_keyword_score': adjusted_keyword_score,
-            'adjusted_keyword_risk_level': adjusted_risk_level,
-            **scoring_result  # Include all your existing scoring results
+            
+            # Enhanced risk results
+            'enhanced_risk': enhanced_risk,
+            'final_risk_score': enhanced_risk['adjusted_score'],
+            'final_risk_level': enhanced_risk['risk_level'],
+            'risk_adjustment_reason': enhanced_risk['adjustment_reason'],
+            'sender_trust_score': enhanced_risk['sender_trust_score'],
+            
+            # Keep original scores for comparison
+            'original_keyword_score': scoring_result['total_score'],
+            'original_total_score': enhanced_risk['original_score'],
+            
+            **scoring_result  # Include all existing scoring results
         }
         
         return analysis
@@ -406,7 +576,7 @@ class PhishingEmailAnalyzer:
         return analyses
     
     def print_email_analysis(self, analysis, email_number):
-        """Print analysis results"""
+        """Print analysis results with enhanced information"""
         print(f"{'='*60}")
         print(f"EMAIL {email_number} ANALYSIS")
         print(f"{'='*60}")
@@ -415,46 +585,40 @@ class PhishingEmailAnalyzer:
         print(f"Subject: {analysis['subject']}")
         print(f"Body Length: {analysis['body_length']} characters")
         
-        # Show context indicators
-        if analysis.get('is_trusted_sender'):
-            print(f"✓ TRUSTED SENDER")
-        if analysis.get('is_security_notification'):
-            print(f"✓ LEGITIMATE SECURITY NOTIFICATION")
-        print()
+        # Show enhanced risk assessment
+        enhanced = analysis.get('enhanced_risk', {})
+        print(f"\nENHANCED RISK ASSESSMENT:")
+        print(f"  Final Risk Level: {analysis.get('final_risk_level', 'UNKNOWN')}")
+        print(f"  Final Risk Score: {analysis.get('final_risk_score', 0)}")
+        print(f"  Sender Trust Score: {enhanced.get('sender_trust_score', 0)}/100")
+        print(f"  Adjustment Reason: {enhanced.get('adjustment_reason', 'None')}")
+        
+        if enhanced.get('scam_patterns_found'):
+            print(f"  🚨 Scam Patterns: {', '.join(enhanced['scam_patterns_found'][:3])}")
+        
+        if enhanced.get('is_security_notification'):
+            print(f"  ✅ LEGITIMATE SECURITY NOTIFICATION")
+        
+        if enhanced.get('is_google_security'):
+            print(f"  ✅ GOOGLE SECURITY NOTIFICATION")
+        
+        print(f"\nORIGINAL SCORES (for comparison):")
+        print(f"  Original Total Score: {enhanced.get('original_score', 0)}")
+        print(f"  Keyword Score: {analysis.get('original_keyword_score', 0)}")
         
         # Show combined risk
-        print(f"COMBINED RISK ASSESSMENT:")
-        print(f"  Combined Risk Level: {analysis['combined_risk_level']}")
-        print(f"  Combined Risk Score: {analysis['combined_risk_score']}")
-        print()
-        
-        # Show keyword analysis
-        print(f"KEYWORD ANALYSIS:")
-        print(f"  Adjusted Risk Level: {analysis.get('adjusted_keyword_risk_level', 'UNKNOWN')}")
-        print(f"  Adjusted Score: {analysis.get('adjusted_keyword_score', 0):.1f}")
-        print(f"  Original Score: {analysis['total_score']}")
+        print(f"\nDETAILED BREAKDOWN:")
         print(f"  Keywords Found: {analysis['total_matches']}")
-        print()
         
         # Link analysis
         link_risk = analysis.get('link_risk', {})
         if link_risk.get('has_links'):
-            print(f"LINK/URL ANALYSIS:")
-            print(f"  Link Risk Level: {link_risk['link_risk_level']}")
-            print(f"  Link Risk Score: {link_risk['link_risk_score']}")
-            print(f"  Total Links: {link_risk['total_links']}")
-            print(f"  Suspicious Links: {link_risk['suspicious_link_count']}")
-            print()
+            print(f"  Links: {link_risk['total_links']} total, {link_risk['suspicious_link_count']} suspicious")
         
         # Attachment analysis
         attachment_risk = analysis.get('attachment_risk', {})
         if attachment_risk.get('has_attachments'):
-            print(f"ATTACHMENT ANALYSIS:")
-            print(f"  Attachment Risk Level: {attachment_risk['attachment_risk_level']}")
-            print(f"  Attachment Risk Score: {attachment_risk['attachment_risk_score']}")
-            print(f"  Total Attachments: {attachment_risk['total_attachments']}")
-            print(f"  Suspicious Attachments: {attachment_risk['suspicious_attachment_count']}")
-            print()
+            print(f"  Attachments: {attachment_risk['total_attachments']} total, {attachment_risk['suspicious_attachment_count']} suspicious")
         
         print(f"\n{'='*60}\n")
     
@@ -464,10 +628,13 @@ class PhishingEmailAnalyzer:
             return {}
         
         total_emails = len(analyses)
-        high_risk = sum(1 for a in analyses if a.get('combined_risk_level') == 'HIGH')
-        medium_risk = sum(1 for a in analyses if a.get('combined_risk_level') == 'MEDIUM')
-        trusted_senders = sum(1 for a in analyses if a.get('is_trusted_sender'))
-        security_notifications = sum(1 for a in analyses if a.get('is_security_notification'))
+        high_risk = sum(1 for a in analyses if a.get('final_risk_level') == 'HIGH')
+        medium_risk = sum(1 for a in analyses if a.get('final_risk_level') == 'MEDIUM')
+        trusted_senders = sum(1 for a in analyses if a.get('sender_trust_score', 0) >= 80)
+        security_notifications = sum(1 for a in analyses 
+                                   if a.get('enhanced_risk', {}).get('is_security_notification'))
+        google_security = sum(1 for a in analyses 
+                            if a.get('enhanced_risk', {}).get('is_google_security'))
         
         # Keep your existing summary structure
         domain_high_risk = sum(1 for a in analyses 
@@ -476,17 +643,21 @@ class PhishingEmailAnalyzer:
                                   for a in analyses)
         
         avg_score = sum(a['total_score'] for a in analyses) / total_emails
+        avg_final_score = sum(a.get('final_risk_score', 0) for a in analyses) / total_emails
         
         return {
             'total_emails_analyzed': total_emails,
             'high_risk_emails': high_risk,
             'medium_risk_emails': medium_risk,
-            'suspicious_emails': sum(1 for a in analyses if a['total_score'] >= 10),
+            'suspicious_emails': sum(1 for a in analyses if a.get('final_risk_score', 0) >= 10),
             'domain_high_risk_emails': domain_high_risk,
             'total_suspicious_urls': total_suspicious_urls,
             'trusted_senders': trusted_senders,
             'security_notifications': security_notifications,
+            'google_security_notifications': google_security,
             'average_keyword_score': round(avg_score, 2),
+            'average_final_score': round(avg_final_score, 2),
             'highest_score': max(a['total_score'] for a in analyses),
-            'most_suspicious_email': max(analyses, key=lambda x: x['total_score'])
+            'highest_final_score': max(a.get('final_risk_score', 0) for a in analyses),
+            'most_suspicious_email': max(analyses, key=lambda x: x.get('final_risk_score', 0))
         }
