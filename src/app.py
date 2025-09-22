@@ -16,7 +16,6 @@ def allowed_file(filename):
 
 @app.route("/")
 def home():
-    # Landing page with 2 options
     return render_template("home.html")
 
 @app.route("/gmail_login")
@@ -51,8 +50,7 @@ def upload():
         os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
         file.save(filepath)
 
-        # TODO: replace this stub with your CSV/TXT email parsing + analyzer
-        analyses = []  # Example: your GetDataManual pipeline
+        analyses = []  
         summary = {"message": f"File '{filename}' uploaded successfully."}
 
         return render_template("results.html", analyses=analyses, summary=summary)
