@@ -4,102 +4,178 @@
     <title>Email Security Analysis Results</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
-        /* Aggressive URL overflow fixes */
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #e9eff5;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 40px;
+        }
+
+        /* ----- Summary Card ----- */
+        .summary-card {
+            background: #ffffff;
+            border-left: 6px solid #4a90e2;
+            border-radius: 12px;
+            padding: 20px 30px;
+            margin-bottom: 40px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+            transition: transform 0.2s;
+        }
+        .summary-card:hover {
+            transform: translateY(-3px);
+        }
+        .summary-header {
+            font-size: 22px;
+            font-weight: bold;
+            color: #4a90e2;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .summary-stats {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+            text-align: center;
+        }
+        .summary-item {
+            flex: 1 1 180px;
+            margin: 10px;
+            padding: 15px;
+            border-radius: 8px;
+            background: #f7f9fc;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .summary-label {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 16px;
+        }
+        .summary-value {
+            margin-top: 5px;
+            font-size: 20px;
+            color: #4a90e2;
+        }
+
+        /* ----- Email Analysis Card ----- */
+        .email-card {
+            background: #fff;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            border-left: 6px solid #4a90e2;
+        }
+        .email-header {
+            font-size: 20px;
+            font-weight: bold;
+            color: #34495e;
+            margin-bottom: 20px;
+        }
+        .email-section h4 {
+            margin-top: 15px;
+            margin-bottom: 8px;
+            color: #4a90e2;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+
+        /* Info Rows */
+        .info-row {
+            margin-bottom: 6px;
+            font-size: 15px;
+        }
+        .label {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        /* Risk Levels */
+        .risk-high {
+            color: #d32f2f;
+            font-weight: bold;
+        }
+        .risk-medium {
+            color: #f57c00;
+            font-weight: bold;
+        }
+        .risk-low {
+            color: #388e3c;
+            font-weight: bold;
+        }
+
+        /* URL Container */
         .url-container {
             word-break: break-all;
             overflow-wrap: anywhere;
             max-width: 100%;
-            white-space: normal;
-            overflow: hidden;
-        }
-        
-        .url-text {
-            font-family: monospace;
-            font-size: 11px;
             background: #f5f5f5;
-            padding: 4px 6px;
-            border-radius: 3px;
-            display: block;
-            width: 100%;
-            max-width: 100%;
-            word-break: break-all;
-            overflow-wrap: anywhere;
-            white-space: normal;
-            box-sizing: border-box;
-            overflow: hidden;
-            text-overflow: ellipsis;
+            padding: 6px 8px;
+            border-radius: 4px;
+            margin-top: 4px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
         }
-        
-        /* Alternative: Truncate very long URLs */
         .url-truncated {
             font-family: monospace;
-            font-size: 11px;
-            background: #f5f5f5;
-            padding: 4px 6px;
-            border-radius: 3px;
-            display: block;
-            width: 100%;
-            max-width: 100%;
-            box-sizing: border-box;
+            font-size: 13px;
+            white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            white-space: nowrap;
+            display: block;
         }
-        
-        .link-details {
-            margin: 10px 0;
-            padding: 10px;
-            background: #fafafa;
-            border-left: 3px solid #ddd;
-            overflow: hidden;
+        .url-text {
+            font-family: monospace;
+            font-size: 13px;
         }
-        
-        .link-details ul {
+        .url-risk {
+            float: right;
+            font-weight: bold;
+        }
+
+        /* Link/Attachment details */
+        .link-details ul,
+        .attachment-details ul {
             list-style-type: none;
             padding-left: 0;
         }
-        
-        .link-details li {
-            margin-bottom: 10px;
-            padding: 8px;
-            background: white;
-            border-radius: 4px;
+        .link-details li,
+        .attachment-details li {
+            background: #fafafa;
             border: 1px solid #eee;
+            padding: 10px;
+            border-radius: 6px;
+            margin-bottom: 8px;
         }
-        
         .url-label {
             font-weight: bold;
-            color: #333;
             margin-bottom: 4px;
+            display: block;
         }
-        
         .url-issues {
             color: #d32f2f;
             font-size: 14px;
             margin-top: 4px;
         }
-        
-        .url-risk {
-            color: #f57c00;
-            font-weight: bold;
-            float: right;
-        }
-        
-        /* Container improvements */
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        
-        /* Responsive improvements */
+
         @media (max-width: 768px) {
-            .url-text {
-                font-size: 10px;
+            .summary-stats {
+                flex-direction: column;
+                align-items: center;
             }
-            
-            .container {
-                padding: 10px;
+            .summary-item {
+                width: 80%;
             }
         }
     </style>
@@ -107,107 +183,135 @@
 <body>
     <div class="container">
         <h1>Email Security Analysis Results</h1>
-        
+
         {% if summary %}
-        <h2>Analysis Summary</h2>
-        <p><strong>Total Emails Analyzed:</strong> {{ summary.total_emails_analyzed }}</p>
-        <p><strong>High Risk Emails:</strong> {{ summary.high_risk_emails }}</p>
-        <p><strong>Medium Risk Emails:</strong> {{ summary.medium_risk_emails }}</p>
-        <p><strong>Average Keyword Score:</strong> {{ summary.average_keyword_score }}</p>
+        <div class="summary-card">
+            <div class="summary-header">📊 Analysis Summary</div>
+            <div class="summary-stats">
+                <div class="summary-item">
+                    <div class="summary-label">Total Emails</div>
+                    <div class="summary-value">{{ summary.total_emails_analyzed }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">High Risk</div>
+                    <div class="summary-value risk-high">{{ summary.high_risk_emails }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Medium Risk</div>
+                    <div class="summary-value risk-medium">{{ summary.medium_risk_emails }}</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-label">Avg Keyword Score</div>
+                    <div class="summary-value">{{ summary.average_keyword_score }}</div>
+                </div>
+            </div>
+        </div>
         {% endif %}
-        
+
         {% for analysis in analyses %}
-        <h2>Email {{ loop.index }}</h2>
-        
-        <h4>Basic Information</h4>
-        <p><strong>From:</strong> {{ analysis.sender }}</p>
-        <p><strong>Subject:</strong> {{ analysis.subject }}</p>
-        <p><strong>Body Length:</strong> {{ analysis.body_length }} characters</p>
-        
-        <h4>Risk Assessment</h4>
-        <p><strong>Risk Level:</strong> {{ analysis.risk_level }}</p>
-        <p><strong>Total Score:</strong> {{ analysis.total_score }}</p>
-        <p><strong>Keywords Found:</strong> {{ analysis.total_matches }}</p>
-        <p><strong>Subject Matches:</strong> {{ analysis.subject_matches }}</p>
-        <p><strong>Body Matches:</strong> {{ analysis.body_matches }}</p>
-        
-        <!-- Enhanced Link/URL Analysis -->
-        {% if analysis.link_risk and analysis.link_risk.has_links %}
-        <h4>Link/URL Analysis</h4>
-        <p><strong>Link Risk Level:</strong> {{ analysis.link_risk.link_risk_level }}</p>
-        <p><strong>Link Risk Score:</strong> {{ analysis.link_risk.link_risk_score }}</p>
-        <p><strong>Total Links:</strong> {{ analysis.link_risk.total_links }}</p>
-        <p><strong>Suspicious Links:</strong> {{ analysis.link_risk.suspicious_link_count }}</p>
-        
-        {% if analysis.link_risk.link_details %}
-        <div class="link-details">
-            <p><strong>Link Details:</strong></p>
-            <ul>
-                {% for detail in analysis.link_risk.link_details %}
-                {% if detail.type == 'url' %}
-                <li>
-                    <div class="url-label">URL:</div>
-                    <div class="url-container">
-                        {% if detail.url|length > 80 %}
-                            <!-- Truncate very long URLs -->
-                            <span class="url-truncated" title="{{ detail.url }}">{{ detail.url[:80] }}...</span>
-                        {% else %}
-                            <!-- Show full URL for shorter ones -->
-                            <span class="url-text">{{ detail.url }}</span>
-                        {% endif %}
-                        <span class="url-risk">{{ detail.risk_level }} RISK</span>
-                    </div>
-                    <div class="url-issues">
-                        <strong>Issues:</strong> {{ detail.description }}
-                    </div>
-                </li>
-                {% endif %}
-                {% endfor %}
-            </ul>
-        </div>
-        {% endif %}
-        {% endif %}
-        
-        <!-- Enhanced Attachment Analysis -->
-        {% if analysis.attachment_risk and analysis.attachment_risk.has_attachments %}
-        <h4>Attachment Analysis</h4>
-        <p><strong>Attachment Risk Level:</strong> {{ analysis.attachment_risk.attachment_risk_level }}</p>
-        <p><strong>Attachment Risk Score:</strong> {{ analysis.attachment_risk.attachment_risk_score }}</p>
-        <p><strong>Total Attachments:</strong> {{ analysis.attachment_risk.total_attachments }}</p>
-        <p><strong>Suspicious Attachments:</strong> {{ analysis.attachment_risk.suspicious_attachment_count }}</p>
-        
-        <div class="link-details">
-            <p><strong>Attachment Details:</strong></p>
-            <ul>
-                {% for attachment in analysis.attachment_results %}
-                <li>
-                    <div class="url-label">{{ attachment.filename }}</div>
-                    {% if attachment.is_suspicious %}
-                        <span class="url-risk" style="color: #d32f2f;">SUSPICIOUS</span>
-                        {% if attachment.risk_factors %}
-                        <div class="url-issues">
-                            {% for factor in attachment.risk_factors %}
-                            <div>• {{ factor }}</div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
+        <div class="email-card">
+            <div class="email-header">📧 Email {{ loop.index }}</div>
+
+            <div class="email-section">
+                <h4>Basic Information</h4>
+                <div class="info-row"><span class="label">From:</span> {{ analysis.sender }}</div>
+                <div class="info-row"><span class="label">Subject:</span> {{ analysis.subject }}</div>
+                <div class="info-row"><span class="label">Body Length:</span> {{ analysis.body_length }} characters</div>
+            </div>
+
+            <div class="email-section">
+                <h4>Risk Assessment</h4>
+                <div class="info-row"><span class="label">Risk Level:</span>
+                    {% if analysis.risk_level == 'HIGH' %}
+                        <span class="risk-high">{{ analysis.risk_level }}</span>
+                    {% elif analysis.risk_level == 'MEDIUM' %}
+                        <span class="risk-medium">{{ analysis.risk_level }}</span>
                     {% else %}
-                        <span class="url-risk" style="color: #4caf50;">SAFE</span>
+                        <span class="risk-low">{{ analysis.risk_level }}</span>
                     {% endif %}
-                </li>
+                </div>
+                <div class="info-row"><span class="label">Total Score:</span> {{ analysis.total_score }}</div>
+                <div class="info-row"><span class="label">Keywords Found:</span> {{ analysis.total_matches }}</div>
+                <div class="info-row"><span class="label">Subject Matches:</span> {{ analysis.subject_matches }}</div>
+                <div class="info-row"><span class="label">Body Matches:</span> {{ analysis.body_matches }}</div>
+            </div>
+
+            {% if analysis.link_risk and analysis.link_risk.has_links %}
+            <div class="email-section">
+                <h4>🔗 Link/URL Analysis</h4>
+                <div class="info-row"><span class="label">Link Risk Level:</span> {{ analysis.link_risk.link_risk_level }}</div>
+                <div class="info-row"><span class="label">Link Risk Score:</span> {{ analysis.link_risk.link_risk_score }}</div>
+                <div class="info-row"><span class="label">Total Links:</span> {{ analysis.link_risk.total_links }}</div>
+                <div class="info-row"><span class="label">Suspicious Links:</span> {{ analysis.link_risk.suspicious_link_count }}</div>
+
+                {% if analysis.link_risk.link_details %}
+                <div class="link-details">
+                    <p><strong>Link Details:</strong></p>
+                    <ul>
+                        {% for detail in analysis.link_risk.link_details %}
+                        {% if detail.type == 'url' %}
+                        <li>
+                            <div class="url-label">URL:</div>
+                            <div class="url-container">
+                                {% if detail.url|length > 80 %}
+                                    <span class="url-truncated" title="{{ detail.url }}">{{ detail.url[:80] }}...</span>
+                                {% else %}
+                                    <span class="url-text">{{ detail.url }}</span>
+                                {% endif %}
+                                <span class="url-risk">{{ detail.risk_level }} RISK</span>
+                            </div>
+                            <div class="url-issues"><strong>Issues:</strong> {{ detail.description }}</div>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if analysis.attachment_risk and analysis.attachment_risk.has_attachments %}
+            <div class="email-section">
+                <h4>📎 Attachment Analysis</h4>
+                <div class="info-row"><span class="label">Attachment Risk Level:</span> {{ analysis.attachment_risk.attachment_risk_level }}</div>
+                <div class="info-row"><span class="label">Attachment Risk Score:</span> {{ analysis.attachment_risk.attachment_risk_score }}</div>
+                <div class="info-row"><span class="label">Total Attachments:</span> {{ analysis.attachment_risk.total_attachments }}</div>
+                <div class="info-row"><span class="label">Suspicious Attachments:</span> {{ analysis.attachment_risk.suspicious_attachment_count }}</div>
+
+                <div class="attachment-details">
+                    <p><strong>Attachment Details:</strong></p>
+                    <ul>
+                        {% for attachment in analysis.attachment_results %}
+                        <li>
+                            <div class="url-label">{{ attachment.filename }}</div>
+                            {% if attachment.is_suspicious %}
+                                <span class="risk-high">SUSPICIOUS</span>
+                                {% if attachment.risk_factors %}
+                                <div class="url-issues">
+                                    {% for factor in attachment.risk_factors %}
+                                    <div>• {{ factor }}</div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            {% else %}
+                                <span class="risk-low">SAFE</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if analysis.category_scores %}
+            <div class="email-section">
+                <h4>Suspicious Categories</h4>
+                {% for category, score in analysis.category_scores.items() %}
+                <div class="info-row"><span class="label">{{ category.title() }}:</span> {{ "%.1f"|format(score) }}</div>
                 {% endfor %}
-            </ul>
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
-        
-        {% if analysis.category_scores %}
-        <h4>Suspicious Categories</h4>
-        {% for category, score in analysis.category_scores.items() %}
-        <p><strong>{{ category.title() }}:</strong> {{ "%.1f"|format(score) }}</p>
-        {% endfor %}
-        {% endif %}
-        
-        <hr>
         {% endfor %}
     </div>
 </body>

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Email Analyzer</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        .flash-container {
+            max-width: 800px;
+            margin: 0 auto 20px auto;
+            padding: 0 15px;
+        }
+        .flash-message {
+            background: #ffeaea;                
+            color: #d32f2f;                     
+            border: 1px solid #f5c2c7;          
+            border-left: 6px solid #d32f2f;     
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            font-size: 15px;
+            line-height: 1.4;
+            position: relative;
+            animation: fadeIn 0.4s ease-in;
+        }
+        .flash-message strong {
+            display: block;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        @keyframes fadeIn {
+            from {opacity: 0; transform: translateY(-8px);}
+            to   {opacity: 1; transform: translateY(0);}
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Phishing Email Analyzer</h1>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        <div class="flash-container">
+          {% for msg in messages %}
+            <div class="flash-message">
+              <strong>⚠️ Error</strong>
+              {{ msg }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="options">
+        <div class="option-card">
+            <h2>1️⃣ Analyze My Gmail</h2>
+            <p>Connect to Gmail and scan your latest emails for phishing risks.</p>
+            <a class="btn" href="{{ url_for('gmail_login') }}">Log in with Gmail</a>
+        </div>
+
+        <div class="option-card">
+            <h2>2️⃣ Upload Email Dataset</h2>
+            <p>Upload a CSV/TXT file containing raw email data to analyze.</p>
+            <form action="{{ url_for('upload') }}" method="POST" enctype="multipart/form-data">
+                <input type="file" name="file" required>
+                <button class="btn" type="submit">Upload & Analyze</button>
+            </form>
+        </div>
+    </div>
+</div>
+</body>
+</html>
