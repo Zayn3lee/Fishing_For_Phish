@@ -43,7 +43,7 @@ class EmailSecurityAnalyzer:
             'microsoft.com', 'apple.com', 'facebook.com', 'twitter.com',
             'linkedin.com', 'instagram.com', 'netflix.com', 'spotify.com',
             'github.com', 'stackoverflow.com', 'reddit.com', 'youtube.com',
-            'gamasutra.com', 'guardian.com', 'boingboing.net', 'jmason.org',
+            'gamasutra.com', 'guardian.com', 'boingboing.net',
             'example.com', 'localhost.example.com', 'newsisfree.com'
         }
         
@@ -331,7 +331,7 @@ class EmailSecurityAnalyzer:
             )
         
         except Exception as e:
-            print(f"⚠️ Error analyzing {filename}: {str(e)}")
+            print(f" Error analyzing {filename}: {str(e)}")
             # Return a basic result even if analysis fails
             return AnalysisResult(
                 filename=filename,
@@ -355,13 +355,13 @@ class EmailSecurityAnalyzer:
     
     def generate_report(self, results: List[AnalysisResult]) -> str:
         """Generate a comprehensive security analysis report"""
-        report = "📧 EMAIL SECURITY ANALYSIS REPORT\n"
+        report = " EMAIL SECURITY ANALYSIS REPORT\n"
         report += "=" * 50 + "\n\n"
         
         total_emails = len(results)
         suspicious_emails = sum(1 for r in results if r.is_suspicious)
         
-        report += f"📊 SUMMARY:\n"
+        report += f" SUMMARY:\n"
         report += f"Total emails analyzed: {total_emails}\n"
         report += f"Suspicious emails found: {suspicious_emails}\n"
         if total_emails > 0:
@@ -369,33 +369,33 @@ class EmailSecurityAnalyzer:
         report += "\n"
         
         for result in results:
-            report += f"📁 FILE: {result.filename}\n"
+            report += f" FILE: {result.filename}\n"
             report += f"   Sender Domain: {result.sender_domain}\n"
             report += f"   Spam Score: {result.spam_score}\n"
-            report += f"   Status: {'🚨 SUSPICIOUS' if result.is_suspicious else '✅ CLEAN'}\n"
+            report += f"   Status: {' SUSPICIOUS' if result.is_suspicious else '✅ CLEAN'}\n"
             
             if result.suspicious_domains:
-                report += f"   ⚠️ Domain Similarity Alerts:\n"
+                report += f"    Domain Similarity Alerts:\n"
                 for domain, similarity in result.suspicious_domains[:3]:  # Top 3
                     report += f"     • Similar to {domain} ({similarity:.1f}%)\n"
             
             if result.extracted_urls:
-                report += f"   🔗 URLs Found: {len(result.extracted_urls)}\n"
+                report += f"    URLs Found: {len(result.extracted_urls)}\n"
                 for url in result.extracted_urls[:3]:  # First 3
                     report += f"     • {url}\n"
             
             if result.suspicious_urls:
-                report += f"   🚫 Suspicious URLs:\n"
+                report += f"    Suspicious URLs:\n"
                 for url_analysis in result.suspicious_urls:
                     report += f"     • {url_analysis['url']}\n"
                     for reason in url_analysis['suspicious_reasons']:
                         report += f"       - {reason}\n"
             
             if result.ip_addresses:
-                report += f"   🌐 IP Addresses: {', '.join(result.ip_addresses)}\n"
+                report += f"   IP Addresses: {', '.join(result.ip_addresses)}\n"
             
             if result.domain_mismatches:
-                report += f"   🎭 Domain Mismatches:\n"
+                report += f"    Domain Mismatches:\n"
                 for mismatch in result.domain_mismatches:
                     report += f"     • Display: {mismatch['display_domain']} → Actual: {mismatch['url_domain']}\n"
             
@@ -413,7 +413,7 @@ class SimpleEmailAnalyzer:
     
     def analyze_files(self, file_paths):
         """Analyze specific files"""
-        print(f"📧 Analyzing {len(file_paths)} specific files...")
+        print(f" Analyzing {len(file_paths)} specific files...")
         email_files = {}
         
         for filepath in file_paths:
@@ -423,9 +423,9 @@ class SimpleEmailAnalyzer:
                         email_files[filepath] = f.read()
                     print(f"✅ Loaded: {filepath}")
                 except Exception as e:
-                    print(f"❌ Error loading {filepath}: {e}")
+                    print(f" Error loading {filepath}: {e}")
             else:
-                print(f"❌ File not found: {filepath}")
+                print(f" File not found: {filepath}")
         
         return self._run_analysis(email_files)
     
@@ -442,7 +442,7 @@ class SimpleEmailAnalyzer:
         folder = Path(folder_path)
         
         if not folder.exists():
-            print(f"❌ Folder not found: {folder_path}")
+            print(f" Folder not found: {folder_path}")
             return []
         
         # Find files
@@ -457,30 +457,30 @@ class SimpleEmailAnalyzer:
                     if file_path.is_file():
                         email_files[str(file_path)] = self._read_file(file_path)
         
-        print(f"📧 Found {len(email_files)} email files")
+        print(f" Found {len(email_files)} email files")
         return self._run_analysis(email_files)
     
     def analyze_pattern(self, pattern, recursive=True):
         """Analyze files matching a pattern"""
-        print(f"🔍 Analyzing files matching pattern: {pattern}")
+        print(f" Analyzing files matching pattern: {pattern}")
         
         email_files = {}
         matching_files = glob.glob(pattern, recursive=recursive)
         
         if not matching_files:
-            print(f"❌ No files found matching: {pattern}")
+            print(f" No files found matching: {pattern}")
             return []
         
         for filepath in matching_files:
             if os.path.isfile(filepath):
                 email_files[filepath] = self._read_file(filepath)
         
-        print(f"📧 Found {len(email_files)} files")
+        print(f" Found {len(email_files)} files")
         return self._run_analysis(email_files)
     
     def interactive_analysis(self):
         """Interactive mode - ask user what to analyze"""
-        print("\n📧 SIMPLE EMAIL ANALYZER - INTERACTIVE MODE")
+        print("\n SIMPLE EMAIL ANALYZER - INTERACTIVE MODE")
         print("=" * 50)
         
         while True:
@@ -529,44 +529,44 @@ class SimpleEmailAnalyzer:
                 return self.analyze_pattern(pattern, recursive)
             
             elif choice == "4":
-                print("👋 Goodbye!")
+                print(" Goodbye!")
                 return []
             
             else:
-                print("❌ Invalid choice! Please enter 1-4.")
+                print(" Invalid choice! Please enter 1-4.")
     
     def _read_file(self, filepath):
         """Read a single file safely"""
         try:
             with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
-            print(f"✅ Loaded: {filepath}")
+            print(f" Loaded: {filepath}")
             return content
         except Exception as e:
-            print(f"❌ Error loading {filepath}: {e}")
+            print(f" Error loading {filepath}: {e}")
             return ""
     
     def _run_analysis(self, email_files):
         """Run the actual analysis"""
         if not email_files:
-            print("❌ No email files to analyze!")
+            print(" No email files to analyze!")
             return []
         
-        print(f"\n🔍 Running security analysis on {len(email_files)} files...")
+        print(f"\n Running security analysis on {len(email_files)} files...")
         
         # Run analysis
         results = self.analyzer.analyze_multiple_files(email_files)
         
         # Print summary
         suspicious_count = sum(1 for r in results if r.is_suspicious)
-        print(f"\n📊 ANALYSIS COMPLETE!")
+        print(f"\n ANALYSIS COMPLETE!")
         print(f"   Total files: {len(results)}")
         print(f"   Suspicious: {suspicious_count}")
         print(f"   Clean: {len(results) - suspicious_count}")
         
         # Show suspicious files
         if suspicious_count > 0:
-            print(f"\n🚨 SUSPICIOUS FILES FOUND:")
+            print(f"\n SUSPICIOUS FILES FOUND:")
             for result in results:
                 if result.is_suspicious:
                     print(f"\n📁 {result.filename}")
@@ -585,7 +585,7 @@ class SimpleEmailAnalyzer:
                         threats.append(f"Domain mismatches ({len(result.domain_mismatches)})")
                     
                     if threats:
-                        print(f"   ⚠️ Threats: {', '.join(threats)}")
+                        print(f"    Threats: {', '.join(threats)}")
         
         # Generate detailed report
         print(f"\n📄 DETAILED REPORT:")
@@ -637,13 +637,13 @@ def main():
             if len(sys.argv) > 2:
                 analyzer.analyze_folder(sys.argv[2])
             else:
-                print("❌ Please specify folder path")
+                print(" Please specify folder path")
         
         elif sys.argv[1] == '--pattern':
             if len(sys.argv) > 2:
                 analyzer.analyze_pattern(sys.argv[2])
             else:
-                print("❌ Please specify file pattern")
+                print(" Please specify file pattern")
         
         else:
             # Treat all arguments as file paths
