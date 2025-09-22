@@ -11,7 +11,6 @@ import re
 
 # Import data from email
 from get_data import GetData
-from get_data_manual import GetDataManual
 
 # Import your existing keyword detection components
 from keyword_detector import KeywordDetector
@@ -84,10 +83,37 @@ class PhishingEmailAnalyzer:
         if not self.service:
             self.service = GetData.gmail_service()
 
-    def analyze_emails(self, max_results=5):
+    def analyze_emails(self, max_results=10):
         if not self.service:
             raise Exception("Gmail service not initialized. Call initialize_service() first.")
-        return self.analyze_recent_emails(max_results)
+        results = self.service.users().messages().list(
+            userId="me", 
+            maxResults=max_results
+        ).execute()
+        messages = results.get("messages", [])
+        
+        analyses = []
+        
+        print(f"Analyzing {len(messages)} recent emails...\n")
+        
+        for i, msg in enumerate(messages, 1):
+            try:
+                msg_data = self.service.users().messages().get(
+                    userId="me", 
+                    id=msg["id"], 
+                    format="full"
+                ).execute()
+                
+                analysis = self.analyze_single_email(msg_data)
+                analyses.append(analysis)
+                
+                self.print_email_analysis(analysis, i)
+                
+            except Exception as e:
+                print(f"Error analyzing email {i}: {str(e)}")
+        
+        return analyses
+#       return self.analyze_recent_emails(max_results)
 
     def is_highly_trusted_sender(self, sender_email):
         """Check if sender is from a highly trusted domain"""
@@ -544,36 +570,6 @@ class PhishingEmailAnalyzer:
         }
         
         return analysis
-    
-    def analyze_recent_emails(self, max_results=10):
-        """Analyze recent emails using your complete system"""
-        results = self.service.users().messages().list(
-            userId="me", 
-            maxResults=max_results
-        ).execute()
-        messages = results.get("messages", [])
-        
-        analyses = []
-        
-        print(f"Analyzing {len(messages)} recent emails...\n")
-        
-        for i, msg in enumerate(messages, 1):
-            try:
-                msg_data = self.service.users().messages().get(
-                    userId="me", 
-                    id=msg["id"], 
-                    format="full"
-                ).execute()
-                
-                analysis = self.analyze_single_email(msg_data)
-                analyses.append(analysis)
-                
-                self.print_email_analysis(analysis, i)
-                
-            except Exception as e:
-                print(f"Error analyzing email {i}: {str(e)}")
-        
-        return analyses
     
     def print_email_analysis(self, analysis, email_number):
         """Print analysis results with enhanced information"""

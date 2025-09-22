@@ -23,7 +23,7 @@ def home():
 def gmail_login():
     try:
         analyzer.initialize_service()
-        analyses = analyzer.analyze_emails(max_results=5)
+        analyses = analyzer.analyze_emails(max_results=10)
 
         summary = analyzer.get_integration_summary(analyses)
         summary.update(calculate_attachment_summary(analyses))
