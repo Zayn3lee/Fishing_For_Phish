@@ -50,13 +50,53 @@ def upload():
         os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
         file.save(filepath)
 
-        analyses = []  
-        summary = {"message": f"File '{filename}' uploaded successfully."}
+        from email_checker_manual import SimpleEmailAnalyzer  
+        analyzer = SimpleEmailAnalyzer()
+        
+        results = analyzer.analyze_files([filepath])
+
+        analyses = []
+        for result in results:
+            analyses.append({
+                "sender": result.sender_domain,
+                "subject": "",  
+                "body_length": len(result.extracted_urls),  #
+                "risk_level": "HIGH" if result.is_suspicious else "LOW",
+                "total_score": result.spam_score,
+                "total_matches": len(result.suspicious_domains),
+                "subject_matches": 0,
+                "body_matches": 0,
+                "link_risk": {
+                    "has_links": bool(result.extracted_urls),
+                    "total_links": len(result.extracted_urls),
+                    "suspicious_link_count": len(result.suspicious_urls),
+                    "link_risk_level": "HIGH" if result.suspicious_urls else "LOW",
+                    "link_details": [
+                        {
+                            "type": "url",
+                            "url": u["url"],
+                            "risk_level": "HIGH",
+                            "description": ", ".join(u["suspicious_reasons"])
+                        } for u in result.suspicious_urls
+                    ] if result.suspicious_urls else []
+                },
+                "attachment_risk": None,  
+                "attachment_results": [],
+                "category_scores": None
+            })
+
+        summary = {
+            "total_emails_analyzed": len(analyses),
+            "high_risk_emails": sum(1 for a in analyses if a["risk_level"] == "HIGH"),
+            "medium_risk_emails": 0,
+            "average_keyword_score": round(sum(a["total_score"] for a in analyses)/max(1,len(analyses)),2)
+        }
 
         return render_template("results.html", analyses=analyses, summary=summary)
 
     flash("Invalid file type. Only CSV/TXT allowed.")
     return redirect(url_for("home"))
+
 
 def calculate_attachment_summary(analyses):
     total_attachments = 0
