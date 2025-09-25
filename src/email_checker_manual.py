@@ -594,7 +594,7 @@ class SimpleEmailAnalyzer:
         print(report)
         
         # Ask if user wants to save report
-        try:
+        """ try:
             save = input("\n💾 Save report to file? (y/n): ").strip().lower()
             if save == 'y':
                 report_file = input("Enter filename (or press Enter for 'email_analysis_report.txt'): ").strip()
@@ -608,7 +608,7 @@ class SimpleEmailAnalyzer:
                 except Exception as e:
                     print(f"❌ Error saving report: {e}")
         except KeyboardInterrupt:
-            print("\n👋 Exiting...")
+            print("\n👋 Exiting...") """
         
         return results
 
