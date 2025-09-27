@@ -267,7 +267,7 @@ class DomainURLDetector:
             ipv4_pattern = r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)'
     
     def _create_analysis_result(self, is_suspicious: bool, reasons: List[str], 
-                              url: str, domain: str) -> Dict:
+                                url: str, domain: str) -> Dict:
         """Create standardized analysis result"""
         return {
             'is_suspicious': is_suspicious,
@@ -352,7 +352,7 @@ class DomainURLDetector:
 
 
 def analyze_email_domain_and_urls(sender_email: str, email_body: str, 
-                                 email_subject: str = "") -> Dict:
+                                    email_subject: str = "") -> Dict:
     """
     Main function to analyze email domains and URLs for security threats
     """
