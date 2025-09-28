@@ -1,14 +1,9 @@
 #!/usr/bin/env python3
-"""
-Fixed Simple Email Analyzer - Compatible with existing email_checker.py
-"""
-
 import os
 import sys
 import glob
 from pathlib import Path
 
-# First, let's patch the original EmailSecurityAnalyzer to fix the missing methods
 import re
 import email
 from email.parser import Parser
@@ -19,7 +14,7 @@ from dataclasses import dataclass
 
 @dataclass
 class AnalysisResult:
-    """Container for analysis results"""
+    #"""Container for analysis results"""
     filename: str
     sender_domain: str
     suspicious_domains: List[Tuple[str, float]]  # (domain, similarity_score)
@@ -30,11 +25,7 @@ class AnalysisResult:
     spam_score: float
     is_suspicious: bool
 
-class EmailSecurityAnalyzer:
-    """
-    Fixed version of EmailSecurityAnalyzer that actually works
-    """
-    
+class EmailSecurityAnalyzer: 
     def __init__(self):
         # Legitimate domain database - expand as needed
         self.legitimate_domains = {
@@ -43,8 +34,7 @@ class EmailSecurityAnalyzer:
             'microsoft.com', 'apple.com', 'facebook.com', 'twitter.com',
             'linkedin.com', 'instagram.com', 'netflix.com', 'spotify.com',
             'github.com', 'stackoverflow.com', 'reddit.com', 'youtube.com',
-            'gamasutra.com', 'guardian.com', 'boingboing.net',
-            'example.com', 'localhost.example.com', 'newsisfree.com'
+            'gamasutra.com', 'guardian.com', 'example.com', 'localhost.example.com', 'newsisfree.com'
         }
         
         # Common typosquatting patterns
@@ -72,7 +62,8 @@ class EmailSecurityAnalyzer:
         )
     
     def levenshtein_distance(self, s1: str, s2: str) -> int:
-        """Calculate Levenshtein distance between two strings"""
+        #Calculate Levenshtein distance between two strings
+        """a string metric that quantifies the difference between two sequences by calculating the minimum number of single-character edits (insertions, deletions, or substitutions) needed to transform one string into the other."""
         if len(s1) < len(s2):
             return self.levenshtein_distance(s2, s1)
         
@@ -92,7 +83,7 @@ class EmailSecurityAnalyzer:
         return previous_row[-1]
     
     def calculate_similarity(self, s1: str, s2: str) -> float:
-        """Calculate similarity percentage between two strings"""
+        #"""Calculate similarity percentage between two strings"""
         max_len = max(len(s1), len(s2))
         if max_len == 0:
             return 100.0
@@ -102,7 +93,7 @@ class EmailSecurityAnalyzer:
         return similarity
     
     def extract_domain_from_email(self, email_address: str) -> str:
-        """Extract domain from email address"""
+        #"""Extract domain from email address"""
         if '@' in email_address:
             # Handle cases like "Name <email@domain.com>"
             email_part = email_address.split('<')[-1].split('>')[0]
@@ -110,7 +101,7 @@ class EmailSecurityAnalyzer:
         return email_address.strip('<>')
     
     def analyze_domain_similarity(self, domain: str, threshold: float = 80.0) -> List[Tuple[str, float]]:
-        """Analyze domain similarity against legitimate domains"""
+        #"""Analyze domain similarity against legitimate domains"""
         suspicious_domains = []
         
         # Skip if domain is already in legitimate domains
@@ -127,12 +118,12 @@ class EmailSecurityAnalyzer:
         return sorted(suspicious_domains, key=lambda x: x[1], reverse=True)[:5]
     
     def extract_urls(self, text: str) -> List[str]:
-        """Extract all URLs from text"""
+        #"""Extract all URLs from text"""
         urls = self.url_pattern.findall(text)
         return list(set(urls))  # Remove duplicates
     
     def extract_ip_addresses(self, text: str) -> List[str]:
-        """Extract IP addresses from text"""
+        #"""Extract IP addresses from text"""
         ips = self.ip_pattern.findall(text)
         # Filter out private/local IPs that might be legitimate
         filtered_ips = []
@@ -200,7 +191,7 @@ class EmailSecurityAnalyzer:
         """Detect mismatches between display text and actual URL destinations"""
         mismatches = []
         
-        # Simple heuristic: look for email addresses in text that don't match URL domains
+        #look for email addresses in text that don't match URL domains
         email_addresses = self.email_pattern.findall(text)
         
         for email_addr in email_addresses:
@@ -224,7 +215,7 @@ class EmailSecurityAnalyzer:
         return mismatches
     
     def parse_email_file(self, file_content: str) -> Dict:
-        """Parse email file and extract headers and content"""
+        #"""Parse email file and extract headers and content"""
         parser = Parser()
         email_obj = parser.parsestr(file_content)
         
@@ -265,7 +256,7 @@ class EmailSecurityAnalyzer:
         return body
     
     def extract_spam_score(self, spam_status: str) -> float:
-        """Extract numerical spam score from X-Spam-Status header"""
+        #"""Extract numerical spam score from X-Spam-Status header"""
         if not spam_status:
             return 0.0
         
@@ -277,7 +268,7 @@ class EmailSecurityAnalyzer:
         return 0.0
     
     def analyze_email_file(self, filename: str, file_content: str) -> AnalysisResult:
-        """Perform comprehensive analysis on a single email file"""
+        #"""Perform comprehensive analysis on a single email file"""
         try:
             # Parse email
             email_data = self.parse_email_file(file_content)
@@ -346,7 +337,7 @@ class EmailSecurityAnalyzer:
             )
     
     def analyze_multiple_files(self, file_contents: Dict[str, str]) -> List[AnalysisResult]:
-        """Analyze multiple email files"""
+        #"""Analyze multiple email files"""
         results = []
         for filename, content in file_contents.items():
             result = self.analyze_email_file(filename, content)
@@ -354,7 +345,7 @@ class EmailSecurityAnalyzer:
         return results
     
     def generate_report(self, results: List[AnalysisResult]) -> str:
-        """Generate a comprehensive security analysis report"""
+        #"""Generate a comprehensive security analysis report"""
         report = " EMAIL SECURITY ANALYSIS REPORT\n"
         report += "=" * 50 + "\n\n"
         
@@ -404,10 +395,6 @@ class EmailSecurityAnalyzer:
         return report
 
 class SimpleEmailAnalyzer:
-    """
-    Simple email analyzer using the fixed analyzer
-    """
-    
     def __init__(self):
         self.analyzer = EmailSecurityAnalyzer()
     
@@ -421,7 +408,7 @@ class SimpleEmailAnalyzer:
                 try:
                     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                         email_files[filepath] = f.read()
-                    print(f"✅ Loaded: {filepath}")
+                    print(f" Loaded: {filepath}")
                 except Exception as e:
                     print(f" Error loading {filepath}: {e}")
             else:
@@ -430,11 +417,11 @@ class SimpleEmailAnalyzer:
         return self._run_analysis(email_files)
     
     def analyze_folder(self, folder_path, recursive=True, file_extensions=None):
-        """Analyze all email files in a folder"""
+        #"""Analyze all email files in a folder"""
         if file_extensions is None:
             file_extensions = ['.txt', '.eml', '.msg']
         
-        print(f"📁 Analyzing folder: {folder_path}")
+        print(f" Analyzing folder: {folder_path}")
         print(f"   Recursive: {recursive}")
         print(f"   Extensions: {file_extensions}")
         
@@ -461,7 +448,7 @@ class SimpleEmailAnalyzer:
         return self._run_analysis(email_files)
     
     def analyze_pattern(self, pattern, recursive=True):
-        """Analyze files matching a pattern"""
+        #"""Analyze files matching a pattern"""
         print(f" Analyzing files matching pattern: {pattern}")
         
         email_files = {}
@@ -569,7 +556,7 @@ class SimpleEmailAnalyzer:
             print(f"\n SUSPICIOUS FILES FOUND:")
             for result in results:
                 if result.is_suspicious:
-                    print(f"\n📁 {result.filename}")
+                    print(f"\n {result.filename}")
                     print(f"   Sender: {result.sender_domain}")
                     print(f"   Spam Score: {result.spam_score}")
                     
@@ -588,28 +575,11 @@ class SimpleEmailAnalyzer:
                         print(f"    Threats: {', '.join(threats)}")
         
         # Generate detailed report
-        print(f"\n📄 DETAILED REPORT:")
+        print(f"\n DETAILED REPORT:")
         print("=" * 60)
         report = self.analyzer.generate_report(results)
         print(report)
-        
-        # Ask if user wants to save report
-        """ try:
-            save = input("\n💾 Save report to file? (y/n): ").strip().lower()
-            if save == 'y':
-                report_file = input("Enter filename (or press Enter for 'email_analysis_report.txt'): ").strip()
-                if not report_file:
-                    report_file = 'email_analysis_report.txt'
-                
-                try:
-                    with open(report_file, 'w', encoding='utf-8') as f:
-                        f.write(report)
-                    print(f"✅ Report saved to: {report_file}")
-                except Exception as e:
-                    print(f"❌ Error saving report: {e}")
-        except KeyboardInterrupt:
-            print("\n👋 Exiting...") """
-        
+    
         return results
 
 def main():
