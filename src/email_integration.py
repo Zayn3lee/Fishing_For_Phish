@@ -14,7 +14,7 @@ from get_data import GetData
 # Import your existing detection components
 from keyword_detector import KeywordDetector
 from position_scorer import PositionScorer
-from distancechecker import analyze_email_domain_and_urls
+from distance_checker import analyze_email_domain_and_urls
 from attachment_analyzer import AttachmentRiskAnalyzer
 
 # Gmail API scopes required

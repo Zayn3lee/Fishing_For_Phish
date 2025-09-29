@@ -247,7 +247,7 @@ class MLPhishingDetector:
         """
         from keyword_detector import KeywordDetector
         from position_scorer import PositionScorer
-        from distancechecker import analyze_email_domain_and_urls
+        from distance_checker import analyze_email_domain_and_urls
         
         # Initialize components
         detector = KeywordDetector()
