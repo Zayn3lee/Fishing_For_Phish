@@ -1,6 +1,7 @@
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from typing import List, Dict
 import base64
 
 # Gmail API scopes required
@@ -14,14 +15,16 @@ class GetData:
         service = build("gmail", "v1", credentials=creds)
         return service
 
+
     def get_email_body(msg_data):
         """
         Extract and decode email body (recursive for multipart emails)
         Skips attachments.
         """
+
+        # Recursive function to go through text
         def get_parts_text(parts):
             for part in parts:
-                mime_type = part.get("mimeType", "")
                 filename = part.get("filename", "")
                 body = part.get("body", {})
 
@@ -61,6 +64,7 @@ class GetData:
                 return body_text
 
         return "No data found"
+    
 
     def get_email_subject(msg_data):
         """
@@ -79,6 +83,7 @@ class GetData:
         
         # No subject found
         return "No subject found"  
+    
 
     def get_email_sender(msg_data):
         """
@@ -97,3 +102,39 @@ class GetData:
             
         # Return if no header is found
         return "No header found"
+    
+
+    def get_gmail_attachments(msg_data) -> List[Dict]:
+        """
+        Extract attachment metadata from a Gmail API message payload.
+
+        Args:
+            msg_data (dict): Gmail message dictionary (as returned by Gmail API).
+
+        Returns:
+            List[Dict]: List of attachment metadata dicts with filename, ID, and base64 inline data.
+        """
+        attachments = []
+
+        # recursive function to go through attachments
+        def parse_parts(parts):
+            for part in parts:
+                filename = part.get("filename")
+                body = part.get("body", {})
+                if filename:
+                    attachments.append({
+                        "filename": filename,
+                        "attachment_id": body.get("attachmentId"),
+                        "data": body.get("data")  # Inline small attachments
+                    })
+                # Recursively handle nested multiparts
+                if "parts" in part:
+                    parse_parts(part["parts"])
+
+        payload = msg_data.get("payload", {})
+        if "parts" in payload:
+            parse_parts(payload["parts"])
+            return attachments
+        
+        # Return if no attachments found
+        return "No attachments found"

@@ -162,7 +162,7 @@ class PhishingEmailAnalyzer:
         domain_url_analysis = analyze_email_domain_and_urls(sender, body, subject)
 
         # Use your existing attachment analysis
-        raw_attachments = self.attachment_analyzer.extract_gmail_attachments(msg_data)
+        raw_attachments = GetData.get_gmail_attachments(msg_data)
         parsed_attachments = self.attachment_analyzer.parse_gmail_attachment_data(
             self.service, msg_data["id"], raw_attachments
         )

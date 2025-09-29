@@ -1,94 +1,122 @@
+# Import necessary Flask modules and utilities
 from flask import Flask, render_template, request, redirect, url_for, flash
-from email_integration import PhishingEmailAnalyzer
-from ml_classifier import MLPhishingDetector  # Import the actual ML class
+from email_integration import PhishingEmailAnalyzer                 # Rule-based Gmail analyzer
+from email_checker_manual import SimpleEmailAnalyzer                # Local rule-based file analyzer
+from ml_classifier import MLPhishingDetector                        # Machine learning classifier
 import os
-from werkzeug.utils import secure_filename
+from werkzeug.utils import secure_filename                          # For safely handling uploaded file names
 
+# Configuration for allowed upload types
 UPLOAD_FOLDER = "uploads"
-ALLOWED_EXTENSIONS = {"csv", "txt", "zip"}  # Added zip for ML training
+ALLOWED_EXTENSIONS = {"csv", "txt", "zip"}  # zip for ML training data
 
+# Initialize Flask app and configuration
 app = Flask(__name__)
-app.secret_key = "super_secret_key"
+app.secret_key = "super_secret_key"                                # Secret key for session/flash
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-analyzer = PhishingEmailAnalyzer()
-ml_detector = MLPhishingDetector()
 
-# Try to load existing ML model on startup
+# Initialize analyzers
+analyzer = PhishingEmailAnalyzer()                                 # Rule-based analyzer
+ml_detector = MLPhishingDetector()                                 # ML-based analyzer
+
+# Load ML model on startup
 ml_detector.load_model()
 
+# Helper function to validate uploaded file types
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
+
+# ------------------ ROUTES ------------------
+
+# Home page route
 @app.route("/")
 def home():
     return render_template("home.html", ml_trained=ml_detector.is_trained)
 
+# Gmail login route to trigger Gmail integration and analyze recent emails
 @app.route("/gmail_login")
 def gmail_login():
+    '''
+    Integrate with Gmail, fetch and analyze recent emails using both rule-based and ML methods.
+    '''
     try:
-        analyzer.initialize_service()
-        analyses = analyzer.analyze_emails(max_results=10)
+        analyzer.initialize_service()  # Connect to Gmail API
+        analyses = analyzer.analyze_emails(max_results=10)  # Analyze latest 10 emails
 
+        # Generate summary statistics
         summary = analyzer.get_integration_summary(analyses)
         summary.update(calculate_attachment_summary(analyses))
         summary.update(calculate_link_summary(analyses))
         
-        # Add ML predictions if available
+        # Add ML predictions if model is trained
         if ml_detector.is_trained:
             for analysis in analyses:
                 try:
+                    # Predict using ML model
                     ml_prob = ml_detector.predict_probability(analysis)
                     analysis["ml_prediction"] = {
                         "probability": ml_prob,
                         "prediction": "phishing" if ml_prob > 0.5 else "legitimate",
                         "confidence": "high" if abs(ml_prob - 0.5) > 0.3 else "medium"
                     }
-                    
-                    # Combine rule-based and ML scores for enhanced decision
+
+                    # Combine rule-based and ML score into a unified score
                     rule_based_score = analysis.get('total_score', 0)
                     ml_score = ml_prob * 100
                     combined_score = (rule_based_score * 0.6) + (ml_score * 0.4)
-                    
+
                     analysis["combined_score"] = combined_score
-                    analysis["enhanced_risk_level"] = "HIGH" if combined_score > 50 else "MEDIUM" if combined_score > 25 else "LOW"
-                    
+                    analysis["enhanced_risk_level"] = (
+                        "HIGH" if combined_score > 50 else
+                        "MEDIUM" if combined_score > 25 else
+                        "LOW"
+                    )
                 except Exception as e:
                     analysis["ml_prediction"] = {"error": str(e)}
-        
+
         summary["ml_model_active"] = ml_detector.is_trained
 
+        # Render the results
         return render_template("results.html", analyses=analyses, summary=summary, results=analyses)
+
     except Exception as e:
         flash(f"Error during Gmail analysis: {str(e)}")
         return redirect(url_for("home"))
 
+# Route to handle uploaded files (TXT/CSV/ZIP) for manual analysis
 @app.route("/upload", methods=["POST"])
 def upload():
+    # Check for file
     if "file" not in request.files:
         flash("No file part")
         return redirect(url_for("home"))
 
+    # Check if file name is empty
     file = request.files["file"]
     if file.filename == "":
         flash("No selected file")
         return redirect(url_for("home"))
 
+    # If file and file name exists
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
         file.save(filepath)
 
-        from email_checker_manual import SimpleEmailAnalyzer  
+        # Call class for functions
         rule_analyzer = SimpleEmailAnalyzer()
-        
+
+        # Analyze uploaded file(s)
         results = rule_analyzer.analyze_files([filepath])
 
+        # Set analysis objects 
         analyses = []
         for result in results:
             analysis = {
                 "sender": result.sender_domain,
-                "subject": "",  
+                "subject": "",
                 "body_length": len(result.extracted_urls),
                 "risk_level": "HIGH" if result.is_suspicious else "LOW",
                 "total_score": result.spam_score,
@@ -109,22 +137,26 @@ def upload():
                         } for u in result.suspicious_urls
                     ] if result.suspicious_urls else []
                 },
-                "attachment_risk": {"has_attachments": False, "attachment_risk_score": 0, "suspicious_attachment_count": 0},
+                "attachment_risk": {
+                    "has_attachments": False,
+                    "attachment_risk_score": 0,
+                    "suspicious_attachment_count": 0
+                },
                 "attachment_results": [],
                 "category_scores": {}
             }
-            
-            # Add ML prediction if model is trained
+
+            # If ML model is trained, add ML prediction
             if ml_detector.is_trained:
                 try:
-                    # Create analysis for ML using your mock analysis function
+                    # Construct mock analysis input for ML model
                     mock_analysis = {
                         'subject': '',
                         'body': '',
                         'body_length': 0,
                         'subject_length': 0,
                         'total_score': result.spam_score,
-                        'keyword_score': result.spam_score * 0.5,  # Estimate keyword portion
+                        'keyword_score': result.spam_score * 0.5,
                         'total_matches': len(result.suspicious_domains),
                         'subject_matches': 0,
                         'body_matches': 0,
@@ -144,82 +176,80 @@ def upload():
                             'suspicious_link_count': len(result.suspicious_urls)
                         }
                     }
-                    
+
                     ml_probability = ml_detector.predict_probability(mock_analysis)
-                    
+
                     analysis["ml_prediction"] = {
                         "probability": ml_probability,
                         "prediction": "phishing" if ml_probability > 0.5 else "legitimate",
                         "confidence": "high" if abs(ml_probability - 0.5) > 0.3 else "medium"
                     }
-                    
-                    # Combine rule-based and ML for final decision
+
+                    # Combine rule-based and ML predictions
                     combined_score = (result.spam_score * 0.6) + (ml_probability * 100 * 0.4)
                     analysis["combined_score"] = combined_score
-                    analysis["enhanced_risk_level"] = "HIGH" if combined_score > 50 else "MEDIUM" if combined_score > 25 else "LOW"
-                    
+                    analysis["enhanced_risk_level"] = (
+                        "HIGH" if combined_score > 50 else
+                        "MEDIUM" if combined_score > 25 else
+                        "LOW"
+                    )
+
                 except Exception as e:
                     analysis["ml_prediction"] = {"error": str(e)}
-            
+
             analyses.append(analysis)
 
+        # Summary generation
         summary = {
             "total_emails_analyzed": len(analyses),
             "high_risk_emails": sum(1 for a in analyses if a["risk_level"] == "HIGH"),
             "medium_risk_emails": 0,
-            "average_keyword_score": round(sum(a["total_score"] for a in analyses)/max(1,len(analyses)),2),
+            "average_keyword_score": round(sum(a["total_score"] for a in analyses) / max(1, len(analyses)), 2),
             "ml_model_active": ml_detector.is_trained
         }
-        
-        # Add ML summary if available
-        if ml_detector.is_trained:
-            ml_high_risk = sum(1 for a in analyses 
-                             if a.get("ml_prediction", {}).get("prediction") == "phishing")
-            summary["ml_high_risk_emails"] = ml_high_risk
-            
-            # Add enhanced risk summary
-            enhanced_high_risk = sum(1 for a in analyses 
-                                   if a.get("enhanced_risk_level") == "HIGH")
-            summary["enhanced_high_risk_emails"] = enhanced_high_risk
 
+        if ml_detector.is_trained:
+            summary["ml_high_risk_emails"] = sum(1 for a in analyses if a.get("ml_prediction", {}).get("prediction") == "phishing")
+            summary["enhanced_high_risk_emails"] = sum(1 for a in analyses if a.get("enhanced_risk_level") == "HIGH")
+
+        # Render ML model results to HTMl
         return render_template("results.html", analyses=analyses, summary=summary)
 
     flash("Invalid file type. Only CSV/TXT/ZIP allowed.")
     return redirect(url_for("home"))
 
+# Route to display ML training UI
 @app.route("/ml_train")
 def ml_train_page():
-    """ML training page"""
+    ''' ML training HTML page'''
     return render_template("ml_train.html")
 
+# Route to handle ML model training
 @app.route("/ml_train", methods=["POST"])
 def ml_train():
-    """Train ML model from raw email files"""
-    training_type = request.form.get('training_type', 'file')
-    
+    ''' Training ML model '''
+    training_type = request.form.get('training_type', 'file')  # Default to 'file'
+
     if training_type == 'file':
-        # Handle file upload
-        if "file" not in request.files:
+        if "file" not in request.files or request.files["file"].filename == "":
             flash("No file selected")
             return redirect(url_for("ml_train_page"))
-        
+
+
         file = request.files["file"]
-        if file.filename == "":
-            flash("No file selected")
-            return redirect(url_for("ml_train_page"))
         
-        # Accept CSV and ZIP files for training
-        if not (file.filename.endswith('.csv') or file.filename.endswith('.zip')):
-            flash("Please upload a CSV file (structured data) or ZIP file (raw email folders)")
+        # Check if file is empty or CSV or ZIP uploaded
+        if not (file.filename =="" or file.filename.endswith('.csv') or file.filename.endswith('.zip')):
+            flash("Please upload a CSV (structured data) or ZIP (raw emails)")
             return redirect(url_for("ml_train_page"))
-        
+
         filename = secure_filename(file.filename)
         filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
         os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
         file.save(filepath)
-        
+
         try:
-            # Train model based on file type
+            # Train ML model
             if filename.endswith('.csv'):
                 print("Training from CSV file...")
                 results = ml_detector.train_from_csv(filepath)
@@ -234,21 +264,20 @@ def ml_train():
             # If results is a list, take the first element
             if isinstance(results, list):
                 results = results[0]
-            
+
             ml_detector.save_model()
-            
             flash(f"Model trained successfully! Accuracy: {results['accuracy']:.3f}")
             return render_template("ml_results.html", results=results)
-            
+
         except Exception as e:
             flash(f"Training failed: {str(e)}")
             print(f"Detailed error: {e}")
             return redirect(url_for("ml_train_page"))
-    
     else:
         flash("Invalid training type selected")
         return redirect(url_for("ml_train_page"))
 
+# Route to get ML model status (for frontend AJAX or debug)
 @app.route("/ml_status")
 def ml_status():
     """Check ML model status"""
@@ -258,6 +287,10 @@ def ml_status():
         "model_exists": os.path.exists(ml_detector.model_path)
     }
 
+
+# ------------------ SUMMARY FUNCTIONS ------------------
+
+# Summarize attachment risks across all emails
 def calculate_attachment_summary(analyses):
     total_attachments = 0
     total_suspicious_attachments = 0
@@ -278,6 +311,7 @@ def calculate_attachment_summary(analyses):
         "high_risk_attachment_emails": high_risk_attachment_emails,
     }
 
+# Summarize link risks across all emails
 def calculate_link_summary(analyses):
     total_links = 0
     total_suspicious_links = 0
@@ -298,5 +332,6 @@ def calculate_link_summary(analyses):
         "high_risk_link_emails": high_risk_link_emails,
     }
 
+# Run the Flask app
 if __name__ == "__main__":
     app.run(debug=True, port=8081)
