@@ -15,6 +15,7 @@ class DomainURLDetector:
         self.phishing_domain_keywords = self._initialize_phishing_keywords()
         self.suspicious_tlds = self._initialize_suspicious_tlds()
         self.shortener_domains = self._initialize_shortener_domains()
+        self.brand_names = self._initialize_brand_names()
 
     def _initialize_legitimate_domains(self) -> Set[str]:
         """
@@ -84,6 +85,17 @@ class DomainURLDetector:
         Initialize commonly used URL shorteners.
         """
         return ['bit.ly', 'tinyurl.com', 'goo.gl']
+
+    def _initialize_brand_names(self) -> List[str]:
+        """
+        Initialize common brand names to check for abuse in domains/paths.
+        """
+        return [
+            'paypal', 'google', 'microsoft', 'amazon', 'apple', 
+            'facebook', 'meta', 'instagram', 'twitter', 'netflix',
+            'linkedin', 'dropbox', 'adobe', 'yahoo', 'ebay',
+            'citibank', 'chase', 'wellsfargo', 'bankofamerica'
+        ]
 
     def extract_urls_from_text(self, text: str) -> List[str]:
         """
@@ -161,6 +173,8 @@ class DomainURLDetector:
             self._check_suspicious_tlds(analysis_domain, reasons)
             self._check_character_patterns(analysis_domain, reasons)
             self._check_homograph_attacks(analysis_domain, reasons)
+            self._check_typosquatting(analysis_domain, reasons)
+            self._check_brand_abuse(analysis_domain, parsed_url.path, reasons)
             self._check_url_path(parsed_url.path, reasons)
 
         except Exception as e:
@@ -182,7 +196,7 @@ class DomainURLDetector:
 
     def _check_suspicious_patterns(self, domain: str, reasons: List[str]) -> None:
         for pattern in self.suspicious_patterns:
-            if re.search(pattern, domain):
+            if re.search(pattern, domain) or re.search(pattern = 'http'):
                 reasons.append(f'Matches suspicious pattern: {pattern}')
 
     def _check_url_shorteners(self, domain: str, reasons: List[str]) -> None:
@@ -204,7 +218,7 @@ class DomainURLDetector:
             reasons.append('Excessive use of hyphens')
 
     def _check_homograph_attacks(self, domain: str, reasons: List[str]) -> None:
-        """Check for potential homograph attacks"""
+        """Check for potential homograph attacks (character substitution)"""
         suspicious_chars = set('0oO1lI')
         if any(char in domain for char in suspicious_chars):
             for legit_domain in list(self.legitimate_domains):
@@ -213,6 +227,62 @@ class DomainURLDetector:
                 # If very high similarity threshold and domain isn't legit
                 if 0.9 < similarity < 1.0 and not domain.endswith('.' + legit_domain):
                     reasons.append(f'Potentially mimics legitimate domain: {legit_domain}')
+                    break
+
+    def _check_typosquatting(self, domain: str, reasons: List[str]) -> None:
+        """Check for typosquatting attempts against legitimate domains"""
+        # Extract base domain without TLD for better comparison
+        domain_parts = domain.rsplit('.', 2)
+        if len(domain_parts) >= 2:
+            domain_base = domain_parts[0] if len(domain_parts) == 2 else '.'.join(domain_parts[:-2])
+        else:
+            domain_base = domain
+        
+        for legit_domain in self.legitimate_domains:
+            # Extract base of legitimate domain
+            legit_parts = legit_domain.rsplit('.', 2)
+            if len(legit_parts) >= 2:
+                legit_base = legit_parts[0] if len(legit_parts) == 2 else '.'.join(legit_parts[:-2])
+            else:
+                legit_base = legit_domain
+            
+            # Check edit distance similarity
+            similarity = SequenceMatcher(None, domain_base.lower(), legit_base.lower()).ratio()
+            
+            # Catch typosquatting (0.7-0.95 similarity range)
+            # Also check full domain similarity to catch cases like paypal.com vs paypall.com
+            full_similarity = SequenceMatcher(None, domain.lower(), legit_domain.lower()).ratio()
+            
+            if ((0.7 <= similarity < 0.95) or (0.7 <= full_similarity < 0.95)) and domain != legit_domain:
+                # Additional check: ensure it's not a legitimate subdomain
+                if not domain.endswith('.' + legit_domain):
+                    reasons.append(f'Possible typosquatting of: {legit_domain}')
+                    break
+
+    def _check_brand_abuse(self, domain: str, path: str, reasons: List[str]) -> None:
+        """Check if legitimate brand names appear in suspicious locations"""
+        domain_lower = domain.lower()
+        
+        # Check if brand appears in domain but domain isn't legitimate
+        for brand in self.brand_names:
+            if brand in domain_lower and not self._is_legitimate_domain(domain):
+                # Check if it's actually part of a legitimate domain (e.g., facebook.com)
+                is_legit_brand_domain = any(
+                    legit.startswith(brand) or f'.{brand}.' in legit 
+                    for legit in self.legitimate_domains
+                )
+                
+                # Only flag if this brand domain isn't in our legitimate list
+                if not is_legit_brand_domain or not any(domain_lower.endswith(legit) for legit in self.legitimate_domains):
+                    reasons.append(f'Contains brand name "{brand}" in untrusted domain')
+                    break
+        
+        # Check path for brand names (always suspicious)
+        if path:
+            path_lower = path.lower()
+            for brand in self.brand_names:
+                if brand in path_lower:
+                    reasons.append(f'Contains brand name "{brand}" in URL path')
                     break
 
     def _check_url_path(self, path: str, reasons: List[str]) -> None:
@@ -287,7 +357,10 @@ class DomainURLDetector:
         if suspicious_tld:
             reasons.append(f'Uses suspicious TLD: {", ".join(suspicious_tld)}')
 
-        # Check similarity to legit domains
+        # Check for typosquatting in sender domain
+        self._check_typosquatting(domain, reasons)
+
+        # Check similarity to legit domains (original homograph check)
         for legit in self.legitimate_domains:
             similarity = SequenceMatcher(None, domain, legit).ratio()
             if 0.9 < similarity < 1.0 and not domain.endswith('.' + legit):
@@ -366,6 +439,7 @@ def analyze_email_domain_and_urls(sender_email: str, email_body: str, email_subj
             'sender_suspicious': sender_analysis['is_suspicious'],
             'urls_found': len(all_urls),
             'suspicious_urls': len(suspicious_urls),
+            'result': print(suspicious_urls),
             'total_risk_factors': len(risk_factors)
         }
     }
