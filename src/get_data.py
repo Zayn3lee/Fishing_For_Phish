@@ -88,15 +88,15 @@ class GetData:
 
     def get_email_subject(msg_data: Dict) -> str:
         """
-        Extracts the email subject line from message headers.
-
+        Extract email subject from Gmail API message data
+        
         Args:
             msg_data (dict): Gmail API message data
 
         Returns:
             str: Email subject or fallback message
         """
-        headers = msg_data.get("payload", {}).get("headers", [])
+        headers = msg_data["payload"].get("headers", [])
         for header in headers:
             if header["name"].lower() == "subject":
                 return header["value"]
@@ -104,30 +104,31 @@ class GetData:
 
     def get_email_sender(msg_data: Dict) -> str:
         """
-        Extracts the sender's email address from message headers.
-
+        Extract sender information from Gmail API message data
+        
         Args:
             msg_data (dict): Gmail API message data
 
         Returns:
             str: Sender email address or fallback message
         """
-        headers = msg_data.get("payload", {}).get("headers", [])
+        headers = msg_data["payload"].get("headers", [])
         for header in headers:
             if header["name"].lower() == "from":
                 return header["value"]
+            
+        # Return if no header is found
         return "No header found"
 
     def get_gmail_attachments(msg_data: Dict) -> Union[List[Dict], str]:
         """
-        Extracts metadata for any attachments in the email.
+        Extract attachment metadata from a Gmail API message payload.
 
         Args:
-            msg_data (dict): Gmail API message dictionary
+            msg_data (dict): Gmail message dictionary (as returned by Gmail API).
 
         Returns:
-            list of dict or str: List of attachment metadata (filename, attachmentId, base64 data),
-                                 or a fallback string if no attachments are found
+            List[Dict]: List of attachment metadata dicts with filename, ID, and base64 inline data.
         """
         attachments = []
 
@@ -145,15 +146,16 @@ class GetData:
                     attachments.append({
                         "filename": filename,
                         "attachment_id": body.get("attachmentId"),
-                        "data": body.get("data")  # May be inline base64
+                        "data": body.get("data")  # Inline small attachments
                     })
-                # Handle nested MIME parts
+                # Recursively handle nested multiparts
                 if "parts" in part:
                     parse_parts(part["parts"])
 
         payload = msg_data.get("payload", {})
         if "parts" in payload:
             parse_parts(payload["parts"])
-            return attachments if attachments else "No attachments found"
-
+            return attachments
+        
+        # Return if no attachments found
         return "No attachments found"
