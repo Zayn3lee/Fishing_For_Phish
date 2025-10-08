@@ -37,13 +37,14 @@ class EmailSecurityAnalyzer:
             'microsoft.com', 'apple.com', 'facebook.com', 'twitter.com',
             'linkedin.com', 'instagram.com', 'netflix.com', 'spotify.com',
             'github.com', 'stackoverflow.com', 'reddit.com', 'youtube.com',
-            'gamasutra.com', 'guardian.com', 'example.com', 
-            'localhost.example.com', 'newsisfree.com'
+            'gamasutra.com', 'example.com', 
+            'localhost.example.com'
         }
 
         self.typosquatting_patterns = [
             ('o', '0'), ('i', '1'), ('l', '1'), ('e', '3'),
-            ('a', '@'), ('s', '$'), ('g', '9'), ('b', '6')
+            ('a', '@'), ('s', '$'), ('g', '9'), ('b', '6'),
+            ('l', 'I')  # common confusion
         ]
 
         self.suspicious_tlds = {'.tk', '.ml', '.ga', '.cf', '.click', '.download'}
@@ -81,6 +82,47 @@ class EmailSecurityAnalyzer:
             previous_row = current_row
 
         return previous_row[-1]
+    
+    def detect_typosquatting(self, domain: str) -> List[str]:
+        """
+        Detect typosquatting attempts by checking for character substitutions
+        and homograph-like patterns (e.g., paypaI vs paypal).
+        Returns a list of typosquatting alerts.
+        """
+        alerts = []
+        domain_lower = domain.lower()
+
+        # Skip legitimate domains
+        if domain_lower in self.legitimate_domains:
+            return alerts
+
+        # Normalize domain (remove www. and subdomains)
+        core_domain = domain_lower.split('.')[-2] + '.' + domain_lower.split('.')[-1] if '.' in domain_lower else domain_lower
+
+        # Check if it resembles a known good domain
+        for legit_domain in self.legitimate_domains:
+            legit_core = legit_domain.lower()
+            similarity = self.calculate_similarity(core_domain, legit_core)
+            if similarity >= 75 and similarity < 100:
+                alerts.append(f"Typosquatting suspected: {core_domain} vs {legit_core} ({similarity:.1f}% similarity)")
+
+        # Check for character substitution patterns
+        for original, replacement in self.typosquatting_patterns:
+            if replacement in domain_lower or original in domain_lower:
+                replaced = domain_lower.replace(replacement, original)
+                if replaced in self.legitimate_domains:
+                    alerts.append(f"Character substitution: '{replacement}' → '{original}' (looks like {replaced})")
+
+        # Homoglyphs: visually similar letters (I vs l, 0 vs O)
+        homoglyphs = {'0': 'o', '1': 'l', 'I': 'l'}
+        for fake, real in homoglyphs.items():
+            if fake in domain_lower:
+                possible_fix = domain_lower.replace(fake, real)
+                if possible_fix in self.legitimate_domains:
+                    alerts.append(f"Homoglyph attack: '{fake}' → '{real}' (could mimic {possible_fix})")
+
+        return alerts
+
 
     def calculate_similarity(self, s1: str, s2: str) -> float:
         """Calculate similarity between two strings using Levenshtein distance."""
@@ -177,10 +219,14 @@ class EmailSecurityAnalyzer:
             short_domains = ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'short.link']
             if any(short in analysis['domain'] for short in short_domains):
                 analysis['suspicious_reasons'].append('URL shortening service')
+            # Typosquatting detection
+            typo_alerts = self.detect_typosquatting(analysis['domain'])
+            if typo_alerts:
+                 analysis['suspicious_reasons'].extend(typo_alerts)
 
         except Exception as e:
             analysis['suspicious_reasons'].append(f'URL parsing error: {str(e)}')
-
+    
         return analysis
 
     def detect_domain_mismatches(self, text: str, urls: List[str]) -> List[Dict[str, str]]:
@@ -272,7 +318,7 @@ class EmailSecurityAnalyzer:
             ip_addresses = self.extract_ip_addresses(all_text)
             domain_mismatches = self.detect_domain_mismatches(all_text, extracted_urls)
             spam_score = self.extract_spam_score(email_data['spam_status'])
-
+            # Final suspicion decision
             is_suspicious = (
                 len(suspicious_domains) > 0 or
                 len(suspicious_urls) > 0 or
@@ -331,7 +377,7 @@ class EmailSecurityAnalyzer:
             report += f" FILE: {result.filename}\n"
             report += f"   Sender Domain: {result.sender_domain}\n"
             report += f"   Spam Score: {result.spam_score}\n"
-            report += f"   Status: {' SUSPICIOUS' if result.is_suspicious else '✅ CLEAN'}\n"
+            report += f"   Status: {' SUSPICIOUS' if result.is_suspicious else ' CLEAN'}\n" # Highlight if suspicious else clean
             
             if result.suspicious_domains:
                 report += f"    Domain Similarity Alerts:\n"

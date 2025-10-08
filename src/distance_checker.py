@@ -112,11 +112,7 @@ class DomainURLDetector:
 
         url_patterns = [
             r'https?://[^\s<>"\'\[\]{}]+',
-            r'www\.[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s<>"\'\[\]{}]*)?',
-            r'(?<!@)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:/[^\s<>"\'\[\]{}]*)?',
-            # Add pattern to catch IP addresses as URLs
-            r'https?://(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:/[^\s<>"\'\[\]{}]*)?',
-            r'(?<!@)(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(?:/[^\s<>"\'\[\]{}]*)?'
+            r'www\.[^\s<>"\'\[\]{}]+'
         ]
 
         urls = set()
@@ -128,6 +124,19 @@ class DomainURLDetector:
                     urls.add(cleaned_url)
         return list(urls)
 
+    def normalize_url_for_set(self, url: str) -> str:
+        """
+        Normalize URLs to avoid duplicates:
+        - Ensure protocol
+        - Remove trailing slash
+        - Lowercase
+        """
+        url = self._clean_url(url)
+        if not url.startswith(('http://', 'https://')):
+            url = 'http://' + url
+        if url.endswith('/'):
+            url = url[:-1]
+        return url.lower()
     def _clean_url(self, url: str) -> Optional[str]:
         """
         Strips punctuation and trailing characters from URL.
@@ -406,7 +415,12 @@ def analyze_email_domain_and_urls(sender_email: str, email_body: str, email_subj
     # Extract URLs from subject and body
     subject_urls = detector.extract_urls_from_text(email_subject or "")
     body_urls = detector.extract_urls_from_text(email_body or "")
-    all_urls = list(set(subject_urls + body_urls))
+    all_urls_set = set()
+    for url in subject_urls + body_urls:
+        normalized = detector.normalize_url_for_set(url)
+        if normalized:
+            all_urls_set.add(normalized)
+    all_urls = list(all_urls_set)
 
     url_analyses = []
     suspicious_urls = []

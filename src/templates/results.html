@@ -182,8 +182,25 @@
                         <li>Total Links: {{ analysis.get('link_risk', {}).get('total_links', 0) }}</li>
                         <li>Suspicious Links: {{ analysis.get('link_risk', {}).get('suspicious_link_count', 0) }}</li>
                         <li>Link Risk Level: {{ analysis.get('link_risk', {}).get('link_risk_level', 'LOW') }}</li>
+                        {% if analysis.get('domain_url_analysis', {}).get('url_analyses') %}
+                        <li>Suspicious Link Details:
+                            <ul>
+                                {% for url_info in analysis.domain_url_analysis.url_analyses %}
+                                <li>
+                                    {{ url_info.get('url', 'Unknown URL') }}: 
+                                    {% if url_info.get('reasons') %}
+                                        {{ url_info.reasons | join(', ') }}
+                                    {% else %}
+                                        No specific reasons found
+                                    {% endif %}
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </li>
+                        {% endif %}
                     </ul>
                     {% endif %}
+
                     
                     {% if analysis.get('attachment_risk', {}).get('has_attachments') %}
                     <p><strong>Attachments Analysis:</strong></p>

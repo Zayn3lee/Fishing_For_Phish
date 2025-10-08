@@ -416,9 +416,12 @@ class PhishingEmailAnalyzer:
         
         # Link analysis
         link_risk = analysis.get('link_risk', {})
+        domain_url_analysis = analysis.get('domain_url_analysis', {})
         if link_risk.get('has_links'):
             print(f"  Links: {link_risk['total_links']} total, {link_risk['suspicious_link_count']} suspicious")
-        
+            url_analysis = domain_url_analysis.get('url_analysis', [])
+        else:
+            print("  No detailed URL analyses available.")
         # Attachment analysis
         attachment_risk = analysis.get('attachment_risk', {})
         if attachment_risk.get('has_attachments'):
