@@ -48,7 +48,9 @@ class SuspiciousKeywords:
                 'selected', 'chosen', 'reward', 'bonus', 'gift',
                 'free money', 'cash prize', 'million dollars', 'lucky',
                 'jackpot', 'sweepstakes', 'contest winner', 'grand prize',
-                'you\'ve won', 'claim your prize', 'lucky winner'
+                'you\'ve won', 'claim your prize', 'lucky winner',
+                'free cash', 'easy money', 'make money fast', 'quick cash',
+                'get rich', 'financial freedom', 'no investment', 'freemoney'
             ],
 
             'personal_info': [
@@ -82,10 +84,107 @@ class SuspiciousKeywords:
             'urgency': 8,
             'financial_security': 10,
             'action_oriented': 6,
-            'legitimacy_claims': 9,
+            'legitimacy_claims': 15,
             'personal_info': 7,
             'threats': 12
         }
+
+    # NEW: Domain and URL specific keywords
+    def get_phishing_domain_keywords() -> List[str]:
+        """
+        Keywords frequently used in phishing domain names
+        
+        Returns:
+            List[str]: Keywords that appear in malicious domains
+        """
+        return [
+            'secure', 'verify', 'update', 'confirm', 'urgent', 'suspended',
+            'blocked', 'limited', 'restricted', 'temporary', 'alert',
+            'warning', 'notice', 'action', 'required', 'immediate',
+            'banking', 'payment', 'billing', 'invoice'
+        ]
+    
+    def get_suspicious_url_path_keywords() -> List[str]:
+        """
+        Keywords that are suspicious when found in URL paths
+        
+        Returns:
+            List[str]: Keywords that indicate phishing in URL paths
+        """
+        return [
+            'verify', 'confirm', 'secure', 'update', 'login', 
+            'suspended', 'locked', 'urgent', 'account', 'validation',
+            'authentication', 'security', 'billing', 'payment'
+        ]
+    
+    def get_legitimate_domains() -> set:
+        """
+        Known legitimate domains to whitelist
+        
+        Returns:
+            set: Set of legitimate domain names
+        """
+        return {
+            # Banking and Financial
+            'paypal.com', 'citibank.com', 'americanexpress.com',
+
+            # Government and Education
+            'gov.sg', 'sit.singaporetech.edu.sg', 'nus.edu.sg', 'ntu.edu.sg',
+
+            # Email Providers
+            'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com',
+            'icloud.com', 'mail.com',
+
+            # Tech Companies
+            'google.com', 'accounts.google.com', 'gmail.google.com',
+            'googlemail.com', 'youtube.com', 'googlemessages.com',
+            'android.com',
+            'microsoft.com', 'live.com',
+            'apple.com', 'icloud.com', 'me.com',
+            'amazon.com', 'amazonses.com',
+            'facebook.com', 'meta.com', 'instagram.com',
+            'twitter.com', 'x.com', 'tiktok.com',
+            'github.com', 'stackoverflow.com', 'reddit.com',
+        }
+    
+    def get_suspicious_tlds() -> List[str]:
+        """
+        Top-level domains often abused in phishing attacks
+        
+        Returns:
+            List[str]: Suspicious TLD extensions
+        """
+        return [
+            '.tk', '.ml', '.ga', '.cf', '.click', '.download',
+            '.top', '.win', '.bid', '.loan', '.work', '.date',
+            '.racing', '.accountant', '.science', '.party'
+        ]
+    
+    def get_url_shortener_domains() -> List[str]:
+        """
+        Common URL shortening services
+        
+        Returns:
+            List[str]: URL shortener domain names
+        """
+        return [
+            'bit.ly', 'tinyurl.com', 'goo.gl', 't.co', 'ow.ly', 
+            'short.link', 'tiny.cc', 'is.gd', 'buff.ly'
+        ]
+    
+    def get_brand_names() -> List[str]:
+        """
+        Common brand names to check for abuse in domains/paths
+        
+        Returns:
+            List[str]: Brand names that are often spoofed
+        """
+        return [
+            'paypal', 'google', 'microsoft', 'amazon', 'apple', 
+            'facebook', 'meta', 'instagram', 'twitter', 'netflix',
+            'linkedin', 'dropbox', 'adobe', 'yahoo', 'ebay',
+            'citibank', 'chase', 'wellsfargo', 'bankofamerica'
+        ]
 
     def get_all_keywords() -> List[str]:
         """
@@ -101,7 +200,7 @@ class SuspiciousKeywords:
         for keyword_list in categories.values():
             all_keywords.extend(keyword_list)
 
-        return list(set(all_keywords))  # Deduplicate
+        return list(set(all_keywords))
 
     def get_keywords_by_category(category: str) -> List[str]:
         """
@@ -157,5 +256,11 @@ if __name__ == "__main__":
 
     print(f"\nTotal unique keywords: {len(keywords.get_all_keywords())}")
 
-    # Lookup test
-    print(f"\nUrgency keywords: {keywords.get_keywords_by_category('urgency')[:3]}...")
+    # Test new domain/URL methods
+    print("\n=== URL/DOMAIN KEYWORDS ===")
+    print(f"Phishing domain keywords: {len(keywords.get_phishing_domain_keywords())}")
+    print(f"Suspicious URL path keywords: {len(keywords.get_suspicious_url_path_keywords())}")
+    print(f"Legitimate domains: {len(keywords.get_legitimate_domains())}")
+    print(f"Suspicious TLDs: {len(keywords.get_suspicious_tlds())}")
+    print(f"URL shorteners: {len(keywords.get_url_shortener_domains())}")
+    print(f"Brand names: {len(keywords.get_brand_names())}")

@@ -5,6 +5,167 @@ from position_scorer import PositionScorer
 from distance_checker import analyze_email_domain_and_urls
 from attachment_analyzer import AttachmentRiskAnalyzer
 
+class RiskAssessmentEngine:
+    """
+    General-purpose risk assessment that prioritizes signals correctly
+    """
+    
+    def __init__(self):
+        self.risk_weights = {
+            'sender_legitimacy': 0.35,      # Most important
+            'domain_url_risk': 0.30,        # Second most important
+            'attachment_risk': 0.20,        # Third
+            'keyword_risk': 0.15            # Least important (context-dependent)
+        }
+    
+    def assess_risk(self, analysis: dict) -> dict:
+        """
+        General risk assessment using weighted scoring
+        """
+        # 1. Check sender legitimacy FIRST
+        sender_analysis = analysis.get('domain_url_analysis', {}).get('sender_analysis', {})
+        sender_legitimate = not sender_analysis.get('is_suspicious', True)
+        
+        # 2. Calculate component scores
+        sender_score = self._calculate_sender_score(sender_analysis, sender_legitimate)
+        url_score = self._calculate_url_score(analysis.get('domain_url_analysis', {}))
+        attachment_score = analysis.get('attachment_risk', {}).get('attachment_risk_score', 0)
+        keyword_score = self._calculate_keyword_score(
+            analysis.get('keyword_score', 0),
+            sender_legitimate,
+            analysis
+        )
+        
+        # 3. Apply weights
+        weighted_score = (
+            sender_score * self.risk_weights['sender_legitimacy'] +
+            url_score * self.risk_weights['domain_url_risk'] +
+            attachment_score * self.risk_weights['attachment_risk'] +
+            keyword_score * self.risk_weights['keyword_risk']
+        )
+        
+        # 4. Apply override rules
+        final_score, risk_level = self._apply_override_rules(
+            weighted_score,
+            sender_legitimate,
+            url_score,
+            attachment_score,
+            analysis
+        )
+        
+        return {
+            'final_score': final_score,
+            'risk_level': risk_level,
+            'component_scores': {
+                'sender': sender_score,
+                'urls': url_score,
+                'attachments': attachment_score,
+                'keywords': keyword_score
+            },
+            'sender_legitimate': sender_legitimate
+        }
+    
+    def _calculate_sender_score(self, sender_analysis: dict, is_legitimate: bool) -> float:
+        """Calculate sender risk score"""
+        if is_legitimate:
+            return 0  # Legitimate sender = no sender risk
+        
+        # Unknown or suspicious sender
+        base_score = 30
+        risk_score = sender_analysis.get('risk_score', 0)
+        
+        return min(base_score + (risk_score * 5), 100)
+    
+    def _calculate_url_score(self, domain_analysis: dict) -> float:
+        """Calculate URL risk score"""
+        risk_score = domain_analysis.get('risk_score', 0)
+        suspicious_url_count = domain_analysis.get('suspicious_url_count', 0)
+        
+        # IP addresses, URL shorteners = automatic high score
+        for url_analysis in domain_analysis.get('url_analyses', []):
+            if any('IP address' in reason for reason in url_analysis.get('reasons', [])):
+                return 80  # Very high risk
+            if any('shortener' in reason.lower() for reason in url_analysis.get('reasons', [])):
+                return 60  # High risk
+        
+        return min(risk_score * 8 + suspicious_url_count * 15, 100)
+    
+    def _calculate_keyword_score(self, raw_keyword_score: float, 
+                                  sender_legitimate: bool, 
+                                  analysis: dict) -> float:
+        """
+        Context-aware keyword scoring
+        Keywords mean different things from legitimate vs unknown senders
+        """
+        # If sender is legitimate, keywords are less suspicious
+        if sender_legitimate:
+            # Check if keywords match expected context
+            subject = analysis.get('subject', '').lower()
+            
+            # Expected security-related keywords from legitimate senders
+            expected_keywords = ['security', 'alert', 'notification', 'update', 'access']
+            has_expected = any(kw in subject for kw in expected_keywords)
+            
+            if has_expected:
+                return raw_keyword_score * 0.2  # Reduce by 80%
+            else:
+                return raw_keyword_score * 0.5  # Reduce by 50%
+        
+        # Unknown sender - keywords are more suspicious
+        return raw_keyword_score * 1.5  # Increase by 50%
+    
+    def _apply_override_rules(self, weighted_score: float,
+                               sender_legitimate: bool,
+                               url_score: float,
+                               attachment_score: float,
+                               analysis: dict) -> tuple:
+        """
+        Apply override rules that trump normal scoring
+        """
+        final_score = weighted_score
+        
+        # RULE 1: Legitimate sender with suspicious URLs = RED FLAG
+        if sender_legitimate and url_score > 60:
+            final_score = max(final_score, 50)  # Force MEDIUM at minimum
+        
+        # RULE 2: Malicious attachment = immediate HIGH risk
+        if attachment_score > 40:
+            final_score = max(final_score, 60)  # Force HIGH
+        
+        # RULE 3: IP address in URL = automatic HIGH risk
+        domain_analysis = analysis.get('domain_url_analysis', {})
+        for url_analysis in domain_analysis.get('url_analyses', []):
+            if any('IP address' in reason for reason in url_analysis.get('reasons', [])):
+                final_score = max(final_score, 65)  # Force HIGH
+        
+        # RULE 4: "Free money" type scams = HIGH risk regardless of sender
+        subject = analysis.get('subject', '').lower()
+        body = analysis.get('body', '').lower()
+        combined = subject + ' ' + body
+        
+        scam_phrases = ['free money', 'you won', 'claim prize', 'lottery winner', 
+                       'million dollars', 'inheritance', 'free cash', 'easy money']
+        if any(phrase in combined for phrase in scam_phrases):
+            if not sender_legitimate:
+                final_score = max(final_score, 70)  # Force HIGH
+        
+        # RULE 5: All signals weak = LOW risk
+        if url_score < 10 and attachment_score < 10 and weighted_score < 20:
+            final_score = min(final_score, 15)
+        
+        # Determine risk level
+        if final_score >= 60:
+            risk_level = 'HIGH'
+        elif final_score >= 35:
+            risk_level = 'MEDIUM'
+        elif final_score >= 15:
+            risk_level = 'LOW'
+        else:
+            risk_level = 'MINIMAL'
+        
+        return final_score, risk_level
+
+
 class PhishingEmailAnalyzer:
     """
     Phishing email analyzer using multiple detection components.
@@ -14,6 +175,7 @@ class PhishingEmailAnalyzer:
     - Position scoring
     - Domain/URL analysis
     - Attachment risk analysis
+    - General risk assessment engine
     """
 
     def __init__(self, service=None):
@@ -24,6 +186,7 @@ class PhishingEmailAnalyzer:
         self.keyword_detector = KeywordDetector()
         self.position_scorer = PositionScorer()
         self.attachment_analyzer = AttachmentRiskAnalyzer()
+        self.risk_engine = RiskAssessmentEngine()  # NEW: General risk engine
 
     def initialize_service(self):
         """
@@ -160,7 +323,7 @@ class PhishingEmailAnalyzer:
         Analyze one email:
         - Extract sender, subject, body
         - Run keyword, link, and attachment analysis
-        - Calculate risk scores and assign risk level
+        - Calculate risk scores using general risk engine
         """
         subject = GetData.get_email_subject(msg_data)
         body = GetData.get_email_body(msg_data)
@@ -192,22 +355,11 @@ class PhishingEmailAnalyzer:
         link_risk = self.calculate_link_risk_score(domain_url_analysis)
         keyword_score = scoring_result['total_score']
 
-        # Total risk score aggregation
-        total_score = keyword_score + attachment_risk['attachment_risk_score'] + link_risk['link_risk_score']
-
-        # Assign risk level
-        if total_score >= 60:
-            overall_risk_level = 'HIGH'
-        elif total_score >= 30:
-            overall_risk_level = 'MEDIUM'
-        elif total_score >= 10:
-            overall_risk_level = 'LOW'
-        else:
-            overall_risk_level = 'MINIMAL'
-
-        return {
+        # Create analysis dict
+        analysis = {
             'sender': sender,
             'subject': subject,
+            'body': body if body != "No data found" else "",
             'body_length': len(body),
             'subject_length': len(subject),
             'total_matches': len(all_matches),
@@ -218,10 +370,20 @@ class PhishingEmailAnalyzer:
             'attachment_risk': attachment_risk,
             'link_risk': link_risk,
             'keyword_score': keyword_score,
-            'total_score': total_score,
-            'overall_risk_level': overall_risk_level,
             **scoring_result
         }
+
+        # USE THE GENERAL RISK ENGINE
+        risk_assessment = self.risk_engine.assess_risk(analysis)
+        
+        # Add risk assessment to analysis
+        analysis['total_score'] = risk_assessment['final_score']
+        analysis['overall_risk_level'] = risk_assessment['risk_level']
+        analysis['risk_level'] = risk_assessment['risk_level']  # For backward compatibility
+        analysis['component_scores_breakdown'] = risk_assessment['component_scores']
+        analysis['sender_legitimate'] = risk_assessment['sender_legitimate']
+
+        return analysis
 
     def print_email_analysis(self, analysis, email_number):
         """
@@ -235,16 +397,19 @@ class PhishingEmailAnalyzer:
         print(f"From: {analysis['sender']}")
         print(f"Subject: {analysis['subject']}")
         print(f"Body Length: {analysis['body_length']} characters")
+        print(f"Sender Legitimate: {analysis.get('sender_legitimate', False)}")
         
         # Show risk assessment
         print(f"\nRISK ASSESSMENT:")
         print(f"  Overall Risk Level: {analysis.get('overall_risk_level', 'UNKNOWN')}")
-        print(f"  Total Risk Score: {analysis.get('total_score', 0)}")
+        print(f"  Total Risk Score: {analysis.get('total_score', 0):.2f}")
 
-        print(f"\nSCORE BREAKDOWN:")
-        print(f"  Keyword Score: {analysis.get('keyword_score', 0)}")
-        print(f"  Attachment Score: {analysis.get('attachment_risk', {}).get('attachment_risk_score', 0)}")
-        print(f"  Link/Domain Score: {analysis.get('link_risk', {}).get('link_risk_score', 0)}")
+        print(f"\nCOMPONENT SCORES:")
+        component_scores = analysis.get('component_scores_breakdown', {})
+        print(f"  Sender Score: {component_scores.get('sender', 0):.2f}")
+        print(f"  URL Score: {component_scores.get('urls', 0):.2f}")
+        print(f"  Attachment Score: {component_scores.get('attachments', 0):.2f}")
+        print(f"  Keyword Score: {component_scores.get('keywords', 0):.2f}")
 
         print(f"\nDETAILED BREAKDOWN:")
         print(f"  Keywords Found: {analysis['total_matches']}")
@@ -274,7 +439,7 @@ class PhishingEmailAnalyzer:
         total_emails = len(analyses)
         high_risk = sum(1 for a in analyses if a.get('overall_risk_level') == 'HIGH')
         medium_risk = sum(1 for a in analyses if a.get('overall_risk_level') == 'MEDIUM')
-        suspicious = sum(1 for a in analyses if a.get('total_score', 0) >= 10)
+        suspicious = sum(1 for a in analyses if a.get('total_score', 0) >= 15)
         domain_high_risk = sum(1 for a in analyses if a.get('domain_url_analysis', {}).get('risk_level') == 'HIGH')
         total_suspicious_urls = sum(a.get('domain_url_analysis', {}).get('suspicious_url_count', 0) for a in analyses)
 

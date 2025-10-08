@@ -196,7 +196,7 @@ class DomainURLDetector:
 
     def _check_suspicious_patterns(self, domain: str, reasons: List[str]) -> None:
         for pattern in self.suspicious_patterns:
-            if re.search(pattern, domain) or re.search(pattern = 'http'):
+            if re.search(pattern, domain):  # FIXED: removed the incorrect "or" clause
                 reasons.append(f'Matches suspicious pattern: {pattern}')
 
     def _check_url_shorteners(self, domain: str, reasons: List[str]) -> None:
@@ -317,9 +317,18 @@ class DomainURLDetector:
         if not domain:
             return False
         domain_lower = domain.lower()
+        
+        # Direct match
         if domain_lower in self.legitimate_domains:
             return True
-        return any(domain_lower.endswith('.' + legit) for legit in self.legitimate_domains)
+        
+        # Check if it's a subdomain of any legitimate domain
+        # Example: accounts.google.com should match google.com
+        for legit in self.legitimate_domains:
+            if domain_lower.endswith('.' + legit) or domain_lower == legit:
+                return True
+        
+        return False
 
     def analyze_sender_domain(self, sender_email: str) -> Dict:
         """
@@ -439,7 +448,6 @@ def analyze_email_domain_and_urls(sender_email: str, email_body: str, email_subj
             'sender_suspicious': sender_analysis['is_suspicious'],
             'urls_found': len(all_urls),
             'suspicious_urls': len(suspicious_urls),
-            'result': print(suspicious_urls),
             'total_risk_factors': len(risk_factors)
         }
     }
