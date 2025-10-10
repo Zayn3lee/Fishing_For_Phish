@@ -4,6 +4,7 @@
     <title>Email Security Analysis Results</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
+        /* Keep all your existing styles exactly as they are */
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
             background: #e9eff5;
@@ -169,6 +170,18 @@
             margin-top: 4px;
         }
 
+<<<<<<< Updated upstream
+=======
+        /* ML Prediction Box */
+        .ml-prediction {
+            background: #e7f3ff;
+            border: 1px solid #b8daff;
+            border-radius: 5px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+
+>>>>>>> Stashed changes
         @media (max-width: 768px) {
             .summary-stats {
                 flex-direction: column;
@@ -204,6 +217,7 @@
                     <div class="summary-label">Avg Keyword Score</div>
                     <div class="summary-value">{{ summary.average_keyword_score }}</div>
                 </div>
+<<<<<<< Updated upstream
             </div>
         </div>
         {% endif %}
@@ -312,6 +326,139 @@
             </div>
             {% endif %}
         </div>
+=======
+                {% if summary.get('ml_model_active') %}
+                <div class="summary-item">
+                    <div class="summary-label">ML High Risk</div>
+                    <div class="summary-value risk-high">{{ summary.ml_high_risk_emails }}</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% if summary.get('ml_model_active') %}
+        <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
+            <strong>ML Model Active:</strong> Enhanced detection using machine learning is enabled!
+        </div>
+        {% endif %}
+        {% endif %}
+
+        {% for analysis in analyses %}
+        <div class="email-card">
+            <div class="email-header">📧 Email {{ loop.index }}</div>
+
+            <div class="email-section">
+                <h4>Basic Information</h4>
+                <div class="info-row"><span class="label">From:</span> {{ analysis.sender }}</div>
+                <div class="info-row"><span class="label">Subject:</span> {{ analysis.subject }}</div>
+                <div class="info-row"><span class="label">Body Length:</span> {{ analysis.body_length }} characters</div>
+            </div>
+
+            <div class="email-section">
+                <h4>Risk Assessment</h4>
+                <div class="info-row"><span class="label">Risk Level:</span>
+                    {% if analysis.risk_level == 'HIGH' %}
+                        <span class="risk-high">{{ analysis.risk_level }}</span>
+                    {% elif analysis.risk_level == 'MEDIUM' %}
+                        <span class="risk-medium">{{ analysis.risk_level }}</span>
+                    {% else %}
+                        <span class="risk-low">{{ analysis.risk_level }}</span>
+                    {% endif %}
+                </div>
+                <div class="info-row"><span class="label">Total Score:</span> {{ analysis.total_score }}</div>
+                <div class="info-row"><span class="label">Keywords Found:</span> {{ analysis.total_matches }}</div>
+                <div class="info-row"><span class="label">Subject Matches:</span> {{ analysis.subject_matches }}</div>
+                <div class="info-row"><span class="label">Body Matches:</span> {{ analysis.body_matches }}</div>
+                {% if analysis.get('combined_score') %}
+                <div class="info-row"><span class="label">Combined Score (Rule + ML):</span> {{ "%.1f"|format(analysis.combined_score) }}</div>
+                {% endif %}
+            </div>
+
+            {% if analysis.link_risk and analysis.link_risk.has_links %}
+            <div class="email-section">
+                <h4>🔗 Link/URL Analysis</h4>
+                <div class="info-row"><span class="label">Link Risk Level:</span> {{ analysis.link_risk.link_risk_level }}</div>
+                <div class="info-row"><span class="label">Link Risk Score:</span> {{ analysis.link_risk.link_risk_score }}</div>
+                <div class="info-row"><span class="label">Total Links:</span> {{ analysis.link_risk.total_links }}</div>
+                <div class="info-row"><span class="label">Suspicious Links:</span> {{ analysis.link_risk.suspicious_link_count }}</div>
+                {% if analysis.link_risk.link_details %}
+                <div class="link-details">
+                    <ul>
+                        {% for detail in analysis.link_risk.link_details %}
+                        {% if detail.type == 'url' %}
+                        <li>
+                            <div class="url-label">URL:</div>
+                            <div class="url-container">
+                                {% if detail.url|length > 80 %}
+                                    <span class="url-truncated" title="{{ detail.url }}">{{ detail.url[:80] }}...</span>
+                                {% else %}
+                                    <span class="url-text">{{ detail.url }}</span>
+                                {% endif %}
+                                <span class="url-risk">{{ detail.risk_level }} RISK</span>
+                            </div>
+                            <div class="url-issues"><strong>Issues:</strong> {{ detail.description }}</div>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if analysis.attachment_risk and analysis.attachment_risk.has_attachments %}
+            <div class="email-section">
+                <h4>📎 Attachment Analysis</h4>
+                <div class="info-row"><span class="label">Attachment Risk Level:</span> {{ analysis.attachment_risk.attachment_risk_level }}</div>
+                <div class="info-row"><span class="label">Attachment Risk Score:</span> {{ analysis.attachment_risk.attachment_risk_score }}</div>
+                <div class="info-row"><span class="label">Total Attachments:</span> {{ analysis.attachment_risk.total_attachments }}</div>
+                <div class="info-row"><span class="label">Suspicious Attachments:</span> {{ analysis.attachment_risk.suspicious_attachment_count }}</div>
+
+                <div class="attachment-details">
+                    <ul>
+                        {% for attachment in analysis.attachment_results %}
+                        <li>
+                            <div class="url-label">{{ attachment.filename }}</div>
+                            {% if attachment.is_suspicious %}
+                                <span class="risk-high">SUSPICIOUS</span>
+                                {% if attachment.risk_factors %}
+                                <div class="url-issues">
+                                    {% for factor in attachment.risk_factors %}
+                                    <div>• {{ factor }}</div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                            {% else %}
+                                <span class="risk-low">SAFE</span>
+                            {% endif %}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if analysis.category_scores %}
+            <div class="email-section">
+                <h4>Suspicious Categories</h4>
+                {% for category, score in analysis.category_scores.items() %}
+                <div class="info-row"><span class="label">{{ category.title() }}:</span> {{ "%.1f"|format(score) }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if analysis.ml_prediction %}
+            <div class="ml-prediction">
+                <strong>ML Prediction:</strong>
+                {% if analysis.ml_prediction.get('error') %}
+                    Error: {{ analysis.ml_prediction.error }}
+                {% else %}
+                    {{ analysis.ml_prediction.prediction|title }} 
+                    ({{ "%.1f"|format(analysis.ml_prediction.probability * 100) }}% confidence)
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+>>>>>>> Stashed changes
         {% endfor %}
     </div>
 </body>
