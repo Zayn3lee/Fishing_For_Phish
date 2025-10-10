@@ -4,107 +4,144 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Train ML Model - Phishing Detector</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-            margin-bottom: 30px;
-        }
         .training-option {
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            padding: 20px;
+            background: #ffffff;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 25px;
             margin-bottom: 20px;
-            background: #f9f9f9;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            transition: all 0.3s;
+        }
+        .training-option:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
         }
         .training-option.active {
-            border-color: #007bff;
-            background: #e7f3ff;
+            border-color: #4a90e2;
+            background: #f0f7ff;
         }
         .option-title {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: bold;
-            color: #333;
+            color: #2b4a80;
             margin-bottom: 10px;
         }
         .option-description {
             color: #666;
             margin-bottom: 15px;
-            line-height: 1.4;
+            line-height: 1.6;
         }
         .file-upload {
             margin-top: 15px;
         }
         .file-input {
             width: 100%;
-            padding: 10px;
-            border: 2px dashed #ddd;
-            border-radius: 5px;
+            padding: 15px;
+            border: 2px dashed #4a90e2;
+            border-radius: 8px;
             text-align: center;
             background: white;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .file-input:hover {
+            background: #f0f7ff;
+            border-color: #357ABD;
         }
         .requirements {
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
-            border-radius: 5px;
-            padding: 15px;
+            background: #fff9e6;
+            border: 1px solid #ffe4a3;
+            border-left: 6px solid #f57c00;
+            border-radius: 8px;
+            padding: 20px;
             margin: 20px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         .requirements h3 {
             margin-top: 0;
-            color: #856404;
+            color: #2b4a80;
+            font-size: 18px;
         }
         .requirements ul {
             margin-bottom: 0;
+            padding-left: 20px;
         }
         .requirements li {
-            margin-bottom: 5px;
+            margin-bottom: 8px;
+            line-height: 1.5;
         }
-        .btn {
-            background: #007bff;
-            color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            margin-top: 20px;
+        .example {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            margin-top: 10px;
+            border: 1px solid #e0e0e0;
+            font-size: 13px;
+            line-height: 1.6;
         }
-        .btn:hover {
-            background: #0056b3;
+        .tips-box {
+            background: #e3f2fd;
+            border: 1px solid #b8daff;
+            border-left: 6px solid #4a90e2;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
-        .btn:disabled {
-            background: #6c757d;
-            cursor: not-allowed;
+        .tips-box h3 {
+            margin-top: 0;
+            color: #2b4a80;
+        }
+        .tips-box ul {
+            margin-bottom: 0;
+            padding-left: 20px;
+        }
+        .tips-box li {
+            margin-bottom: 8px;
+            line-height: 1.5;
         }
         .back-link {
             display: inline-block;
             margin-bottom: 20px;
-            color: #007bff;
+            color: #4a90e2;
             text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
         }
         .back-link:hover {
-            text-decoration: underline;
+            color: #357ABD;
         }
-        .example {
-            background: #e9ecef;
+        .flash-container {
+            max-width: 1200px;
+            margin: 0 auto 20px auto;
+        }
+        .flash-message {
+            background: #ffeaea;
+            color: #d32f2f;
+            border: 1px solid #f5c2c7;
+            border-left: 6px solid #d32f2f;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+        }
+        .flash-message strong {
+            display: block;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        input[type="file"] {
+            font-size: 14px;
             padding: 10px;
-            border-radius: 5px;
-            font-family: monospace;
-            margin-top: 10px;
+        }
+        button.btn {
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
         }
     </style>
 </head>
@@ -116,9 +153,12 @@
         
         {% with messages = get_flashed_messages() %}
             {% if messages %}
-                <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
+                <div class="flash-container">
                     {% for message in messages %}
-                        <div>{{ message }}</div>
+                        <div class="flash-message">
+                            <strong>⚠️ Error</strong>
+                            {{ message }}
+                        </div>
                     {% endfor %}
                 </div>
             {% endif %}
@@ -155,7 +195,7 @@
                 
                 <div class="file-upload">
                     <input type="file" name="file" accept=".zip,.csv" class="file-input" required>
-                    <small style="color: #666;">Accepts ZIP files (raw emails) or CSV files (structured data)</small>
+                    <small style="color: #666; margin-top: 8px; display: block;">Accepts ZIP files (raw emails) or CSV files (structured data)</small>
                 </div>
             </div>
             
@@ -173,8 +213,8 @@
             <button type="submit" class="btn">Start Training</button>
         </form>
         
-        <div style="margin-top: 30px; padding: 20px; background: #d1ecf1; border-radius: 5px;">
-            <h3 style="margin-top: 0;">💡 Training Tips:</h3>
+        <div class="tips-box">
+            <h3>💡 Training Tips:</h3>
             <ul>
                 <li>Use at least 100 examples of each class (phishing and legitimate)</li>
                 <li>More diverse examples lead to better accuracy</li>
