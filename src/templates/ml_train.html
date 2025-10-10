@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Train ML Model - Phishing Detector</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .training-option {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            background: #f9f9f9;
+        }
+        .training-option.active {
+            border-color: #007bff;
+            background: #e7f3ff;
+        }
+        .option-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .option-description {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.4;
+        }
+        .file-upload {
+            margin-top: 15px;
+        }
+        .file-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px dashed #ddd;
+            border-radius: 5px;
+            text-align: center;
+            background: white;
+        }
+        .requirements {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .requirements h3 {
+            margin-top: 0;
+            color: #856404;
+        }
+        .requirements ul {
+            margin-bottom: 0;
+        }
+        .requirements li {
+            margin-bottom: 5px;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #007bff;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+        .example {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="{{ url_for('home') }}" class="back-link">← Back to Home</a>
+        
+        <h1>Train Machine Learning Model</h1>
+        
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div style="background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 5px; padding: 15px; margin-bottom: 20px;">
+                    {% for message in messages %}
+                        <div>{{ message }}</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endwith %}
+        
+        <form method="POST" enctype="multipart/form-data">
+            <div class="training-option active">
+                <div class="option-title">📁 Raw Email Files (Recommended)</div>
+                <div class="option-description">
+                    Upload a ZIP file containing folders of raw email files. This uses your complete analysis pipeline for better accuracy.
+                </div>
+                
+                <div class="requirements">
+                    <h3>Folder Structure Requirements:</h3>
+                    <ul>
+                        <li><strong>Method 1:</strong> Create folders named "phishing" and "legitimate"</li>
+                        <li><strong>Method 2:</strong> Create folders named "spam" and "ham"</li>
+                        <li><strong>Method 3:</strong> Use filenames containing "phishing/spam" or "legitimate/ham"</li>
+                    </ul>
+                    
+                    <div class="example">
+                        Example folder structure:<br>
+                        📦 training_data.zip<br>
+                        ├── 📁 phishing/<br>
+                        │   ├── 📄 email1.txt<br>
+                        │   ├── 📄 email2.eml<br>
+                        │   └── ...<br>
+                        └── 📁 legitimate/<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;├── 📄 email1.txt<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;├── 📄 email2.eml<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;└── ...
+                    </div>
+                </div>
+                
+                <div class="file-upload">
+                    <input type="file" name="file" accept=".zip,.csv" class="file-input" required>
+                    <small style="color: #666;">Accepts ZIP files (raw emails) or CSV files (structured data)</small>
+                </div>
+            </div>
+            
+            <div class="requirements">
+                <h3>📊 Alternative: CSV Format</h3>
+                <p>If you prefer to use structured data, upload a CSV with columns:</p>
+                <ul>
+                    <li><strong>subject</strong> - Email subject line</li>
+                    <li><strong>body</strong> - Email body content</li>
+                    <li><strong>label</strong> - 0 for legitimate, 1 for phishing</li>
+                </ul>
+            </div>
+            
+            <input type="hidden" name="training_type" value="file">
+            <button type="submit" class="btn">Start Training</button>
+        </form>
+        
+        <div style="margin-top: 30px; padding: 20px; background: #d1ecf1; border-radius: 5px;">
+            <h3 style="margin-top: 0;">💡 Training Tips:</h3>
+            <ul>
+                <li>Use at least 100 examples of each class (phishing and legitimate)</li>
+                <li>More diverse examples lead to better accuracy</li>
+                <li>Raw email files (.eml, .txt, .msg) work best</li>
+                <li>Training may take several minutes depending on data size</li>
+                <li>The model will automatically save after successful training</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
