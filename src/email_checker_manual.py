@@ -1,16 +1,25 @@
+#!/usr/bin/env python3
+"""
+Fixed Simple Email Analyzer - Compatible with existing email_checker.py
+"""
+
 import os
 import sys
 import glob
-import re
-from email.parser import Parser
 from pathlib import Path
-from typing import List, Dict, Tuple
-from urllib.parse import urlparse
+
+# First, let's patch the original EmailSecurityAnalyzer to fix the missing methods
+import re
+import email
+from email.parser import Parser
+from typing import List, Dict, Tuple, Set
+from urllib.parse import urlparse, unquote
+import difflib
 from dataclasses import dataclass
 
 @dataclass
 class AnalysisResult:
-    """Container for storing results of email security analysis."""
+    """Container for analysis results"""
     filename: str
     sender_domain: str
     suspicious_domains: List[Tuple[str, float]]  # (domain, similarity_score)
@@ -23,54 +32,53 @@ class AnalysisResult:
 
 class EmailSecurityAnalyzer:
     """
-    Performs in-depth security analysis on email content:
-    - Detects suspicious sender domains
-    - Extracts and analyzes URLs and IPs
-    - Identifies domain mismatches and spam indicators
+    Fixed version of EmailSecurityAnalyzer that actually works
     """
-
+    
     def __init__(self):
-        """Initialize with known good domains and patterns."""
+        # Legitimate domain database - expand as needed
         self.legitimate_domains = {
             'gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com',
             'amazon.com', 'paypal.com', 'ebay.com', 'google.com',
             'microsoft.com', 'apple.com', 'facebook.com', 'twitter.com',
             'linkedin.com', 'instagram.com', 'netflix.com', 'spotify.com',
             'github.com', 'stackoverflow.com', 'reddit.com', 'youtube.com',
-            'gamasutra.com', 'example.com', 
-            'localhost.example.com'
+            'gamasutra.com', 'guardian.com', 'boingboing.net',
+            'example.com', 'localhost.example.com', 'newsisfree.com'
         }
-
+        
+        # Common typosquatting patterns
         self.typosquatting_patterns = [
             ('o', '0'), ('i', '1'), ('l', '1'), ('e', '3'),
-            ('a', '@'), ('s', '$'), ('g', '9'), ('b', '6'),
-            ('l', 'I')  # common confusion
+            ('a', '@'), ('s', '$'), ('g', '9'), ('b', '6')
         ]
-
+        
+        # Suspicious TLDs
         self.suspicious_tlds = {'.tk', '.ml', '.ga', '.cf', '.click', '.download'}
-
-        # Regex for URL extraction
+        
+        # URL regex patterns
         self.url_pattern = re.compile(
             r'https?://(?:[-\w.])+(?:[:\d]+)?(?:/(?:[\w/_.])*(?:\?(?:[\w&=%.])*)?(?:#(?:[\w.])*)?)?',
             re.IGNORECASE
         )
-
-        # Regex for IP extraction
-        self.ip_pattern = re.compile(r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b')
-
-        # Regex for email address extraction
+        
+        self.ip_pattern = re.compile(
+            r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b'
+        )
+        
+        # Email pattern
         self.email_pattern = re.compile(
             r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
         )
-
+    
     def levenshtein_distance(self, s1: str, s2: str) -> int:
-        """Calculate Levenshtein distance (edit distance) between two strings."""
+        """Calculate Levenshtein distance between two strings"""
         if len(s1) < len(s2):
             return self.levenshtein_distance(s2, s1)
-
+        
         if len(s2) == 0:
             return len(s1)
-
+        
         previous_row = list(range(len(s2) + 1))
         for i, c1 in enumerate(s1):
             current_row = [i + 1]
@@ -80,134 +88,97 @@ class EmailSecurityAnalyzer:
                 substitutions = previous_row[j] + (c1 != c2)
                 current_row.append(min(insertions, deletions, substitutions))
             previous_row = current_row
-
+        
         return previous_row[-1]
     
-    def detect_typosquatting(self, domain: str) -> List[str]:
-        """
-        Detect typosquatting attempts by checking for character substitutions
-        and homograph-like patterns (e.g., paypaI vs paypal).
-        Returns a list of typosquatting alerts.
-        """
-        alerts = []
-        domain_lower = domain.lower()
-
-        # Skip legitimate domains
-        if domain_lower in self.legitimate_domains:
-            return alerts
-
-        # Normalize domain (remove www. and subdomains)
-        core_domain = domain_lower.split('.')[-2] + '.' + domain_lower.split('.')[-1] if '.' in domain_lower else domain_lower
-
-        # Check if it resembles a known good domain
-        for legit_domain in self.legitimate_domains:
-            legit_core = legit_domain.lower()
-            similarity = self.calculate_similarity(core_domain, legit_core)
-            if similarity >= 75 and similarity < 100:
-                alerts.append(f"Typosquatting suspected: {core_domain} vs {legit_core} ({similarity:.1f}% similarity)")
-
-        # Check for character substitution patterns
-        for original, replacement in self.typosquatting_patterns:
-            if replacement in domain_lower or original in domain_lower:
-                replaced = domain_lower.replace(replacement, original)
-                if replaced in self.legitimate_domains:
-                    alerts.append(f"Character substitution: '{replacement}' → '{original}' (looks like {replaced})")
-
-        # Homoglyphs: visually similar letters (I vs l, 0 vs O)
-        homoglyphs = {'0': 'o', '1': 'l', 'I': 'l'}
-        for fake, real in homoglyphs.items():
-            if fake in domain_lower:
-                possible_fix = domain_lower.replace(fake, real)
-                if possible_fix in self.legitimate_domains:
-                    alerts.append(f"Homoglyph attack: '{fake}' → '{real}' (could mimic {possible_fix})")
-
-        return alerts
-
-
     def calculate_similarity(self, s1: str, s2: str) -> float:
-        """Calculate similarity between two strings using Levenshtein distance."""
+        """Calculate similarity percentage between two strings"""
         max_len = max(len(s1), len(s2))
         if max_len == 0:
             return 100.0
+        
         distance = self.levenshtein_distance(s1.lower(), s2.lower())
         similarity = (1 - distance / max_len) * 100
         return similarity
     
     def extract_domain_from_email(self, email_address: str) -> str:
-        """Extract the domain portion from an email address."""
+        """Extract domain from email address"""
         if '@' in email_address:
             # Handle cases like "Name <email@domain.com>"
             email_part = email_address.split('<')[-1].split('>')[0]
             return email_part.split('@')[-1].strip()
         return email_address.strip('<>')
-
+    
     def analyze_domain_similarity(self, domain: str, threshold: float = 80.0) -> List[Tuple[str, float]]:
-        """Compare domain to legitimate domains and return suspiciously similar ones."""
+        """Analyze domain similarity against legitimate domains"""
         suspicious_domains = []
         
         # Skip if domain is already in legitimate domains
         if domain.lower() in [d.lower() for d in self.legitimate_domains]:
             return suspicious_domains
-
+        
         for legit_domain in self.legitimate_domains:
             similarity = self.calculate_similarity(domain, legit_domain)
+            
+            # Flag if similarity is high but not exact match
             if threshold <= similarity < 100.0:
                 suspicious_domains.append((legit_domain, similarity))
-
+        
         return sorted(suspicious_domains, key=lambda x: x[1], reverse=True)[:5]
-
+    
     def extract_urls(self, text: str) -> List[str]:
-        """Extract all URLs from a given text."""
-        return list(set(self.url_pattern.findall(text)))
-
+        """Extract all URLs from text"""
+        urls = self.url_pattern.findall(text)
+        return list(set(urls))  # Remove duplicates
+    
     def extract_ip_addresses(self, text: str) -> List[str]:
-        """Extract and filter public IP addresses from text."""
+        """Extract IP addresses from text"""
         ips = self.ip_pattern.findall(text)
+        # Filter out private/local IPs that might be legitimate
         filtered_ips = []
         for ip in ips:
             parts = ip.split('.')
             if len(parts) == 4:
                 try:
                     first_octet = int(parts[0])
-                    if not (
-                        first_octet == 127 or  # localhost
-                        first_octet == 10 or   # private
-                        (first_octet == 172 and 16 <= int(parts[1]) <= 31) or
-                        (first_octet == 192 and int(parts[1]) == 168)
-                    ):
+                    # Skip common local/private ranges but flag others
+                    if not (first_octet == 127 or  # localhost
+                           first_octet == 10 or   # private
+                           (first_octet == 172 and 16 <= int(parts[1]) <= 31) or  # private
+                           (first_octet == 192 and int(parts[1]) == 168)):  # private
                         filtered_ips.append(ip)
                 except ValueError:
-                    filtered_ips.append(ip)
+                    filtered_ips.append(ip)  # Include if parsing fails
         return list(set(filtered_ips))
-
+    
     def analyze_url(self, url: str) -> Dict[str, any]:
-        """Analyze a single URL and identify any suspicious indicators."""
+        """Analyze a single URL for suspicious characteristics"""
         analysis = {
             'url': url,
             'domain': '',
             'suspicious_reasons': []
         }
-
+        
         try:
             parsed = urlparse(url)
             analysis['domain'] = parsed.netloc.lower()
-
-            # Detect direct IP usage in URL
+            
+            # Check for IP addresses in URL
             if self.ip_pattern.match(parsed.netloc):
                 analysis['suspicious_reasons'].append('Direct IP address')
-
+            
             # Check for suspicious TLDs
             domain_parts = parsed.netloc.lower().split('.')
             if len(domain_parts) >= 2:
                 tld = '.' + domain_parts[-1]
                 if tld in self.suspicious_tlds:
                     analysis['suspicious_reasons'].append(f'Suspicious TLD: {tld}')
-
-            # Too many subdomains
+            
+            # Check for excessive subdomains
             if len(domain_parts) > 3:
                 analysis['suspicious_reasons'].append('Excessive subdomains')
-
-            # Similar to known domains?
+            
+            # Check for typosquatting patterns
             suspicious_domains = self.analyze_domain_similarity(analysis['domain'])
             if suspicious_domains:
                 top_match = suspicious_domains[0]
@@ -219,31 +190,28 @@ class EmailSecurityAnalyzer:
             short_domains = ['bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'short.link']
             if any(short in analysis['domain'] for short in short_domains):
                 analysis['suspicious_reasons'].append('URL shortening service')
-            # Typosquatting detection
-            typo_alerts = self.detect_typosquatting(analysis['domain'])
-            if typo_alerts:
-                 analysis['suspicious_reasons'].extend(typo_alerts)
-
+        
         except Exception as e:
             analysis['suspicious_reasons'].append(f'URL parsing error: {str(e)}')
-    
+        
         return analysis
-
+    
     def detect_domain_mismatches(self, text: str, urls: List[str]) -> List[Dict[str, str]]:
-        """Detect mismatches between displayed email domains and actual URL domains."""
+        """Detect mismatches between display text and actual URL destinations"""
         mismatches = []
+        
+        # Simple heuristic: look for email addresses in text that don't match URL domains
         email_addresses = self.email_pattern.findall(text)
-
+        
         for email_addr in email_addresses:
             display_domain = self.extract_domain_from_email(email_addr)
+            
             for url in urls:
                 try:
                     url_domain = urlparse(url).netloc.lower()
-                    if (
-                        display_domain.lower() != url_domain and
+                    if (display_domain.lower() != url_domain and 
                         display_domain.lower() not in url_domain and
-                        url_domain not in display_domain.lower()
-                    ):
+                        url_domain not in display_domain.lower()):
                         mismatches.append({
                             'display_text': email_addr,
                             'actual_url': url,
@@ -252,13 +220,14 @@ class EmailSecurityAnalyzer:
                         })
                 except:
                     continue
-
+        
         return mismatches
-
+    
     def parse_email_file(self, file_content: str) -> Dict:
-        """Parse raw email content and extract metadata."""
+        """Parse email file and extract headers and content"""
         parser = Parser()
         email_obj = parser.parsestr(file_content)
+        
         return {
             'from': email_obj.get('From', ''),
             'to': email_obj.get('To', ''),
@@ -268,9 +237,9 @@ class EmailSecurityAnalyzer:
             'spam_status': email_obj.get('X-Spam-Status', ''),
             'body': self.get_email_body(email_obj)
         }
-
+    
     def get_email_body(self, email_obj) -> str:
-        """Extract plain text body from email object."""
+        """Extract email body content"""
         if email_obj.is_multipart():
             body = ""
             for part in email_obj.walk():
@@ -292,33 +261,55 @@ class EmailSecurityAnalyzer:
                     body = str(payload) if payload else ""
             except:
                 body = str(email_obj.get_payload()) if email_obj.get_payload() else ""
-
+        
         return body
-
+    
     def extract_spam_score(self, spam_status: str) -> float:
-        """Extract spam score from X-Spam-Status header."""
+        """Extract numerical spam score from X-Spam-Status header"""
         if not spam_status:
             return 0.0
+        
+        # Look for hits= pattern
         match = re.search(r'hits=(-?\d+\.?\d*)', spam_status)
         if match:
             return float(match.group(1))
+        
         return 0.0
-
+    
     def analyze_email_file(self, filename: str, file_content: str) -> AnalysisResult:
-        """Perform complete security analysis on one email file."""
+        """Perform comprehensive analysis on a single email file"""
         try:
+            # Parse email
             email_data = self.parse_email_file(file_content)
+            
+            # Extract sender domain
             from_address = email_data['from']
             sender_domain = self.extract_domain_from_email(from_address)
+            
+            # Combine all text content
             all_text = f"{email_data['subject']} {email_data['body']}"
-
+            
+            # Domain similarity analysis
             suspicious_domains = self.analyze_domain_similarity(sender_domain)
+            
+            # URL analysis
             extracted_urls = self.extract_urls(all_text)
-            suspicious_urls = [self.analyze_url(url) for url in extracted_urls if self.analyze_url(url)['suspicious_reasons']]
+            suspicious_urls = []
+            for url in extracted_urls:
+                url_analysis = self.analyze_url(url)
+                if url_analysis['suspicious_reasons']:
+                    suspicious_urls.append(url_analysis)
+            
+            # IP address detection
             ip_addresses = self.extract_ip_addresses(all_text)
+            
+            # Domain mismatch detection
             domain_mismatches = self.detect_domain_mismatches(all_text, extracted_urls)
+            
+            # Extract spam score
             spam_score = self.extract_spam_score(email_data['spam_status'])
-            # Final suspicion decision
+            
+            # Determine if email is suspicious
             is_suspicious = (
                 len(suspicious_domains) > 0 or
                 len(suspicious_urls) > 0 or
@@ -326,7 +317,7 @@ class EmailSecurityAnalyzer:
                 len(domain_mismatches) > 0 or
                 spam_score > 5.0
             )
-
+            
             return AnalysisResult(
                 filename=filename,
                 sender_domain=sender_domain,
@@ -338,9 +329,10 @@ class EmailSecurityAnalyzer:
                 spam_score=spam_score,
                 is_suspicious=is_suspicious
             )
-
+        
         except Exception as e:
-            print(f"Error analyzing {filename}: {str(e)}")
+            print(f" Error analyzing {filename}: {str(e)}")
+            # Return a basic result even if analysis fails
             return AnalysisResult(
                 filename=filename,
                 sender_domain="unknown",
@@ -352,11 +344,14 @@ class EmailSecurityAnalyzer:
                 spam_score=0.0,
                 is_suspicious=False
             )
-
+    
     def analyze_multiple_files(self, file_contents: Dict[str, str]) -> List[AnalysisResult]:
-        """Analyze multiple emails and return results."""
-        return [self.analyze_email_file(fname, content) for fname, content in file_contents.items()]
-
+        """Analyze multiple email files"""
+        results = []
+        for filename, content in file_contents.items():
+            result = self.analyze_email_file(filename, content)
+            results.append(result)
+        return results
     
     def generate_report(self, results: List[AnalysisResult]) -> str:
         """Generate a comprehensive security analysis report"""
@@ -377,7 +372,7 @@ class EmailSecurityAnalyzer:
             report += f" FILE: {result.filename}\n"
             report += f"   Sender Domain: {result.sender_domain}\n"
             report += f"   Spam Score: {result.spam_score}\n"
-            report += f"   Status: {' SUSPICIOUS' if result.is_suspicious else ' CLEAN'}\n" # Highlight if suspicious else clean
+            report += f"   Status: {' SUSPICIOUS' if result.is_suspicious else '✅ CLEAN'}\n"
             
             if result.suspicious_domains:
                 report += f"    Domain Similarity Alerts:\n"
@@ -409,6 +404,10 @@ class EmailSecurityAnalyzer:
         return report
 
 class SimpleEmailAnalyzer:
+    """
+    Simple email analyzer using the fixed analyzer
+    """
+    
     def __init__(self):
         self.analyzer = EmailSecurityAnalyzer()
     
@@ -422,7 +421,7 @@ class SimpleEmailAnalyzer:
                 try:
                     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                         email_files[filepath] = f.read()
-                    print(f" Loaded: {filepath}")
+                    print(f"✅ Loaded: {filepath}")
                 except Exception as e:
                     print(f" Error loading {filepath}: {e}")
             else:
@@ -431,11 +430,11 @@ class SimpleEmailAnalyzer:
         return self._run_analysis(email_files)
     
     def analyze_folder(self, folder_path, recursive=True, file_extensions=None):
-        #"""Analyze all email files in a folder"""
+        """Analyze all email files in a folder"""
         if file_extensions is None:
             file_extensions = ['.txt', '.eml', '.msg']
         
-        print(f" Analyzing folder: {folder_path}")
+        print(f"📁 Analyzing folder: {folder_path}")
         print(f"   Recursive: {recursive}")
         print(f"   Extensions: {file_extensions}")
         
@@ -462,7 +461,7 @@ class SimpleEmailAnalyzer:
         return self._run_analysis(email_files)
     
     def analyze_pattern(self, pattern, recursive=True):
-        #"""Analyze files matching a pattern"""
+        """Analyze files matching a pattern"""
         print(f" Analyzing files matching pattern: {pattern}")
         
         email_files = {}
@@ -570,7 +569,7 @@ class SimpleEmailAnalyzer:
             print(f"\n SUSPICIOUS FILES FOUND:")
             for result in results:
                 if result.is_suspicious:
-                    print(f"\n {result.filename}")
+                    print(f"\n📁 {result.filename}")
                     print(f"   Sender: {result.sender_domain}")
                     print(f"   Spam Score: {result.spam_score}")
                     
@@ -589,11 +588,28 @@ class SimpleEmailAnalyzer:
                         print(f"    Threats: {', '.join(threats)}")
         
         # Generate detailed report
-        print(f"\n DETAILED REPORT:")
+        print(f"\n📄 DETAILED REPORT:")
         print("=" * 60)
         report = self.analyzer.generate_report(results)
         print(report)
-    
+        
+        # Ask if user wants to save report
+        """ try:
+            save = input("\n💾 Save report to file? (y/n): ").strip().lower()
+            if save == 'y':
+                report_file = input("Enter filename (or press Enter for 'email_analysis_report.txt'): ").strip()
+                if not report_file:
+                    report_file = 'email_analysis_report.txt'
+                
+                try:
+                    with open(report_file, 'w', encoding='utf-8') as f:
+                        f.write(report)
+                    print(f"✅ Report saved to: {report_file}")
+                except Exception as e:
+                    print(f"❌ Error saving report: {e}")
+        except KeyboardInterrupt:
+            print("\n👋 Exiting...") """
+        
         return results
 
 def main():

@@ -4,24 +4,14 @@ import zipfile
 import base64
 import re
 from typing import List, Dict
-from get_data import GetData
 
 class AttachmentRiskAnalyzer:
-    """
-    A class for analyzing the risk level of email attachments based on their filename,
-    extension, content, and context within the email (subject and body).
-    """
-
     def __init__(self):
-        # Define sets of file extensions considered risky
         self.high_risk_ext = {".exe", ".scr", ".bat", ".js", ".vbs", ".com", ".pif", ".cmd"}
         self.archive_ext = {".zip", ".rar", ".7z", ".tar", ".gz"}
-        self.office_ext = {
-            ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-            ".docm", ".xlsm", ".pptm"
-        }
-
-        # Regex patterns for filenames that may indicate malicious intent
+        self.office_ext = {".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".docm", ".xlsm", ".pptm"}
+        
+        # Enhanced: Patterns for obviously malicious filenames
         self.malicious_patterns = [
             r'malware', r'virus', r'trojan', r'keylogger', r'ransomware',
             r'payload', r'exploit', r'backdoor', r'rootkit', r'spyware',
@@ -29,72 +19,61 @@ class AttachmentRiskAnalyzer:
             r'crack', r'keygen', r'serial', r'loader', r'injector',
             r'bypass', r'hack.*tool', r'password.*steal', r'data.*steal'
         ]
-
-        # Regex patterns for suspicious filenames (e.g., social engineering)
+        
+        # Suspicious filename patterns
         self.suspicious_patterns = [
             r'urgent.*invoice', r'payment.*due', r'account.*suspended',
             r'security.*update', r'important.*document', r'confidential.*file',
-            r'[0-9]{10,}\.exe',       # long random numbers + .exe
-            r'document\d*\.exe',      # document1.exe
-            r'photo\d*\.exe',         # photo123.exe
-            r'\.pdf\.exe$',           # double extension
-            r'\.jpg\.exe$',
-            r'\.doc\.exe$'
+            r'[0-9]{10,}\.exe',  # Random number executable
+            r'document\d*\.exe',  # Document.exe type files
+            r'photo\d*\.exe',     # Photo.exe type files
+            r'\.pdf\.exe$',       # Double extension
+            r'\.jpg\.exe$',       # Double extension
+            r'\.doc\.exe$'        # Double extension
         ]
 
     def analyze_attachment(self, filename: str, content: bytes, email_subject: str = "", email_body: str = "") -> Dict:
-        """
-        Analyze a single attachment's risk level.
-
-        Args:
-            filename (str): The name of the attachment file.
-            content (bytes): The binary content of the file.
-            email_subject (str): The subject of the email.
-            email_body (str): The body text of the email.
-
-        Returns:
-            Dict: A dictionary containing risk assessment details.
-        """
         ext = os.path.splitext(filename)[1].lower()
         risk_factors = []
         filename_lower = filename.lower()
-
-        # Flag if file name has obvious malware keywords
+        
+        # Check for obviously malicious filenames FIRST
         is_obviously_malicious = False
         for pattern in self.malicious_patterns:
             if re.search(pattern, filename_lower):
                 risk_factors.append(f"CRITICAL: Filename contains malware indicators: '{filename}'")
                 is_obviously_malicious = True
                 break
-
-        # Flag suspicious patterns if not already deemed malicious
+        
+        # Check for suspicious filename patterns
         if not is_obviously_malicious:
             for pattern in self.suspicious_patterns:
                 if re.search(pattern, filename_lower):
                     risk_factors.append(f"Suspicious filename pattern: {filename}")
                     break
-
-        # Check for risky extensions
+        
+        # Check file extension risks
         if ext in self.high_risk_ext:
             if is_obviously_malicious:
-                risk_factors.append("CRITICAL: High-risk executable extension with malicious name")
+                risk_factors.append(f"CRITICAL: High-risk executable extension with malicious name")
             else:
                 risk_factors.append(f"High-risk extension: {ext}")
 
-        # Analyze context (email subject + body) to detect mismatches
+        # Context mismatch analysis (enhanced)
         subject_body = (email_subject or "") + " " + (email_body or "")
         subject_body_lower = subject_body.lower()
-
+        
+        # More sophisticated context analysis
         financial_keywords = ["bank", "paypal", "payment", "invoice", "receipt", "account"]
         security_keywords = ["security", "urgent", "suspended", "verify", "confirm"]
-
-        has_financial_context = any(kw in subject_body_lower for kw in financial_keywords)
-        has_security_context = any(kw in subject_body_lower for kw in security_keywords)
-
+        
+        has_financial_context = any(keyword in subject_body_lower for keyword in financial_keywords)
+        has_security_context = any(keyword in subject_body_lower for keyword in security_keywords)
+        
         if (has_financial_context or has_security_context) and ext in self.high_risk_ext:
             risk_factors.append("CRITICAL: Context mismatch - financial/security email with executable attachment")
 
-        # Analyze ZIP archives for malicious content
+        # Archive analysis
         if ext in self.archive_ext:
             try:
                 if ext == ".zip":
@@ -102,8 +81,8 @@ class AttachmentRiskAnalyzer:
                         for name in z.namelist():
                             nested_ext = os.path.splitext(name)[1].lower()
                             nested_name = name.lower()
-
-                            # Apply same analysis to files within archive
+                            
+                            # Check for malicious files inside archive
                             if any(re.search(pattern, nested_name) for pattern in self.malicious_patterns):
                                 risk_factors.append(f"CRITICAL: Malicious file inside archive: {name}")
                             elif nested_ext in self.high_risk_ext:
@@ -113,7 +92,7 @@ class AttachmentRiskAnalyzer:
             except Exception:
                 risk_factors.append("Could not inspect archive contents - potentially corrupted or protected")
 
-        # Basic macro detection in Office documents
+        # Office document macro detection (enhanced)
         if ext in self.office_ext:
             try:
                 text = content.decode(errors="ignore")
@@ -121,14 +100,19 @@ class AttachmentRiskAnalyzer:
                     "vba", "vbproject", "sub autoopen", "auto_open", "workbook_open",
                     "document_open", "shell", "createobject", "wscript", "powershell"
                 ]
-                found_indicators = [i for i in macro_indicators if i in text.lower()]
+                
+                found_indicators = [indicator for indicator in macro_indicators if indicator in text.lower()]
                 if found_indicators:
                     risk_factors.append(f"Possible macro detected: {', '.join(found_indicators[:3])}")
             except Exception:
-                pass  # Do not crash on decoding issues
-
-        # Final suspicion decision
+                pass
+        
+        # Enhanced suspicious scoring
         is_suspicious = len(risk_factors) > 0 or is_obviously_malicious
+        
+        # Override for obvious malware - always mark as suspicious
+        if is_obviously_malicious:
+            is_suspicious = True
 
         return {
             "filename": filename,
@@ -139,49 +123,46 @@ class AttachmentRiskAnalyzer:
         }
 
     def analyze_attachments(self, attachments: List[Dict], email_subject: str = "", email_body: str = "") -> List[Dict]:
-        """
-        Analyze a list of attachments.
-
-        Args:
-            attachments (List[Dict]): List of attachment dictionaries with 'filename' and 'content'.
-            email_subject (str): The email subject (for context).
-            email_body (str): The email body (for context).
-
-        Returns:
-            List[Dict]: List of analysis results per attachment.
-        """
         results = []
         for att in attachments:
             res = self.analyze_attachment(
-                att.get("filename", ""),
-                att.get("content", b""),
-                email_subject,
+                att.get("filename", ""), 
+                att.get("content", b""), 
+                email_subject, 
                 email_body
             )
             results.append(res)
         return results
 
+    # Recursive function to get all attachments (handles nested multiparts)
+    def extract_gmail_attachments(self, msg_data) -> List[Dict]:
+        attachments = []
+
+        def parse_parts(parts):
+            for part in parts:
+                filename = part.get("filename")
+                body = part.get("body", {})
+                if filename:
+                    attachments.append({
+                        "filename": filename,
+                        "attachment_id": body.get("attachmentId"),
+                        "data": body.get("data")  # inline small files
+                    })
+                if "parts" in part:
+                    parse_parts(part["parts"])
+
+        payload = msg_data.get("payload", {})
+        if "parts" in payload:
+            parse_parts(payload["parts"])
+        return attachments
+
     def parse_gmail_attachment_data(self, service, msg_id: str, attachments: List[Dict]) -> List[Dict]:
-        """
-        Download and decode Gmail attachments using Gmail API.
-
-        Args:
-            service: Authenticated Gmail API service instance.
-            msg_id (str): ID of the Gmail message.
-            attachments (List[Dict]): List of attachment metadata (from extract_gmail_attachments).
-
-        Returns:
-            List[Dict]: List of attachments with raw binary content.
-        """
         parsed = []
-
         for att in attachments:
             try:
-                if att.get("data"):
-                    # Inline data (base64 encoded)
+                if att.get("data"):  # inline content
                     file_data = base64.urlsafe_b64decode(att["data"].encode("UTF-8"))
-                elif att.get("attachment_id"):
-                    # Fetch large file data via Gmail API
+                elif att.get("attachment_id"):  # must fetch from Gmail API
                     att_data = service.users().messages().attachments().get(
                         userId="me",
                         messageId=msg_id,
@@ -189,12 +170,8 @@ class AttachmentRiskAnalyzer:
                     ).execute()
                     file_data = base64.urlsafe_b64decode(att_data["data"].encode("UTF-8"))
                 else:
-                    continue  # Skip if no data available
-                parsed.append({
-                    "filename": att["filename"],
-                    "content": file_data
-                })
+                    continue  # skip if no data
+                parsed.append({"filename": att["filename"], "content": file_data})
             except Exception as e:
                 print(f"Error parsing attachment {att.get('filename')}: {e}")
-
         return parsed
