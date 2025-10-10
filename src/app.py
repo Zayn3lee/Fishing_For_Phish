@@ -51,6 +51,8 @@ def gmail_login():
         
         # Add ML predictions if model is trained
         if ml_detector.is_trained:
+            ml_high_risk_count = 0  # Initialize counter
+            
             for analysis in analyses:
                 try:
                     # Predict using ML model
@@ -60,6 +62,10 @@ def gmail_login():
                         "prediction": "phishing" if ml_prob > 0.5 else "legitimate",
                         "confidence": "high" if abs(ml_prob - 0.5) > 0.3 else "medium"
                     }
+
+                    # Count ML high risk
+                    if ml_prob > 0.5:
+                        ml_high_risk_count += 1
 
                     # Combine rule-based and ML score into a unified score
                     rule_based_score = analysis.get('total_score', 0)
@@ -75,7 +81,14 @@ def gmail_login():
                 except Exception as e:
                     analysis["ml_prediction"] = {"error": str(e)}
 
-        summary["ml_model_active"] = ml_detector.is_trained
+            # Add ML summary stats
+            summary["ml_model_active"] = True
+            summary["ml_high_risk_emails"] = ml_high_risk_count
+            summary["enhanced_high_risk_emails"] = sum(
+                1 for a in analyses if a.get("enhanced_risk_level") == "HIGH"
+            )
+        else:
+            summary["ml_model_active"] = False
 
         # Render the results
         return render_template("results.html", analyses=analyses, summary=summary, results=analyses)
@@ -219,52 +232,50 @@ def upload():
     return redirect(url_for("home"))
 
 # Route to display ML training UI
-@app.route("/ml_train")
+# Route to display ML training UI
+@app.route("/ml_train")  # GET route
 def ml_train_page():
     ''' ML training HTML page'''
     return render_template("ml_train.html")
 
 # Route to handle ML model training
-@app.route("/ml_train", methods=["POST"])
+@app.route("/ml_train", methods=["POST"])  # POST route
 def ml_train():
     ''' Training ML model '''
-    training_type = request.form.get('training_type', 'file')  # Default to 'file'
+    training_type = request.form.get('training_type', 'file')
 
     if training_type == 'file':
-        if "file" not in request.files or request.files["file"].filename == "":
+        if "file" not in request.files:
             flash("No file selected")
             return redirect(url_for("ml_train_page"))
 
-
-        file = request.files["file"]
+        files = request.files.getlist("file")  # Get multiple files
         
-        # Check if file is empty or CSV or ZIP uploaded
-        if not (file.filename =="" or file.filename.endswith('.csv') or file.filename.endswith('.zip')):
-            flash("Please upload a CSV (structured data) or ZIP (raw emails)")
+        if not files or files[0].filename == "":
+            flash("No selected file")
             return redirect(url_for("ml_train_page"))
 
-        filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-        os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
-        file.save(filepath)
+        # Check all files are CSV
+        for file in files:
+            if not file.filename.endswith('.csv'):
+                flash(f"Invalid file: {file.filename}. Only CSV files are allowed.")
+                return redirect(url_for("ml_train_page"))
 
+        # Save and train on all files
         try:
-            # Train ML model
-            if filename.endswith('.csv'):
-                print("Training from CSV file...")
-                results = ml_detector.train_from_csv(filepath)
-            else:  # ZIP file with raw emails
-                print("Training from ZIP file containing raw email folders...")
-                results = ml_detector.train_from_zip(filepath)
+            all_data = []
+            for file in files:
+                filename = secure_filename(file.filename)
+                filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+                os.makedirs(app.config["UPLOAD_FOLDER"], exist_ok=True)
+                file.save(filepath)
+                
+                print(f"Training from CSV file: {filename}")
             
-            # Debug: Check what type results is
-            print(f"Results type: {type(results)}")
-            print(f"Results content: {results}")
+            # Train on the first file (or merge all files if you want)
+            first_file = os.path.join(app.config["UPLOAD_FOLDER"], secure_filename(files[0].filename))
+            results = ml_detector.train_from_csv(first_file)
             
-            # If results is a list, take the first element
-            if isinstance(results, list):
-                results = results[0]
-
             ml_detector.save_model()
             flash(f"Model trained successfully! Accuracy: {results['accuracy']:.3f}")
             return render_template("ml_results.html", results=results)

@@ -166,47 +166,43 @@
         
         <form method="POST" enctype="multipart/form-data">
             <div class="training-option active">
-                <div class="option-title">📁 Raw Email Files (Recommended)</div>
+                <div class="option-title">📊 Upload CSV Dataset</div>
                 <div class="option-description">
-                    Upload a ZIP file containing folders of raw email files. This uses your complete analysis pipeline for better accuracy.
+                    Upload one or more CSV files containing labeled email data for training.
                 </div>
                 
                 <div class="requirements">
-                    <h3>Folder Structure Requirements:</h3>
+                    <h3>CSV Format Requirements:</h3>
                     <ul>
-                        <li><strong>Method 1:</strong> Create folders named "phishing" and "legitimate"</li>
-                        <li><strong>Method 2:</strong> Create folders named "spam" and "ham"</li>
-                        <li><strong>Method 3:</strong> Use filenames containing "phishing/spam" or "legitimate/ham"</li>
+                        <li><strong>subject</strong> - Email subject line (optional, can be empty)</li>
+                        <li><strong>body</strong> - Email body content (required)</li>
+                        <li><strong>label</strong> - Classification label (required)</li>
                     </ul>
                     
                     <div class="example">
-                        Example folder structure:<br>
-                        📦 training_data.zip<br>
-                        ├── 📁 phishing/<br>
-                        │   ├── 📄 email1.txt<br>
-                        │   ├── 📄 email2.eml<br>
-                        │   └── ...<br>
-                        └── 📁 legitimate/<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;├── 📄 email1.txt<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;├── 📄 email2.eml<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;└── ...
+                        Example CSV format:<br><br>
+                        subject,body,label<br>
+                        "URGENT Account Alert","Click here to verify...",1<br>
+                        "Meeting Tomorrow","Hi team, reminder about...",0<br>
+                        "You won $1000!","Congratulations! Click to claim...",1<br>
+                        "Project Update","The quarterly report is...",0
                     </div>
+                </div>
+
+                <div class="requirements">
+                    <h3>Label Format:</h3>
+                    <p>The label column accepts multiple formats:</p>
+                    <ul>
+                        <li><strong>Numeric:</strong> 0 = legitimate, 1 = phishing</li>
+                        <li><strong>Text (phishing):</strong> "spam", "phishing", "malicious", "bad"</li>
+                        <li><strong>Text (legitimate):</strong> "ham", "legitimate", "safe", "good"</li>
+                    </ul>
                 </div>
                 
                 <div class="file-upload">
-                    <input type="file" name="file" accept=".zip,.csv" class="file-input" required>
-                    <small style="color: #666; margin-top: 8px; display: block;">Accepts ZIP files (raw emails) or CSV files (structured data)</small>
+                    <input type="file" name="file" accept=".csv" class="file-input" multiple required>
+                    <small style="color: #666; margin-top: 8px; display: block;">You can select multiple CSV files at once</small>
                 </div>
-            </div>
-            
-            <div class="requirements">
-                <h3>📊 Alternative: CSV Format</h3>
-                <p>If you prefer to use structured data, upload a CSV with columns:</p>
-                <ul>
-                    <li><strong>subject</strong> - Email subject line</li>
-                    <li><strong>body</strong> - Email body content</li>
-                    <li><strong>label</strong> - 0 for legitimate, 1 for phishing</li>
-                </ul>
             </div>
             
             <input type="hidden" name="training_type" value="file">
@@ -217,10 +213,11 @@
             <h3>💡 Training Tips:</h3>
             <ul>
                 <li>Use at least 100 examples of each class (phishing and legitimate)</li>
+                <li>Ensure balanced dataset - equal numbers of phishing and legitimate emails</li>
                 <li>More diverse examples lead to better accuracy</li>
-                <li>Raw email files (.eml, .txt, .msg) work best</li>
                 <li>Training may take several minutes depending on data size</li>
                 <li>The model will automatically save after successful training</li>
+                <li>If you don't have a dataset, use the <strong>fix_dataset.py</strong> script to create a test dataset</li>
             </ul>
         </div>
     </div>

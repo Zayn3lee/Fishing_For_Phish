@@ -324,15 +324,6 @@
             </div>
             {% endif %}
 
-            {% if analysis.category_scores %}
-            <div class="email-section">
-                <h4>Suspicious Categories</h4>
-                {% for category, score in analysis.category_scores.items() %}
-                <div class="info-row"><span class="label">{{ category.title() }}:</span> {{ "%.1f"|format(score) }}</div>
-                {% endfor %}
-            </div>
-            {% endif %}
-
             {% if analysis.ml_prediction %}
             <div class="ml-prediction">
                 <strong>ML Prediction:</strong>
