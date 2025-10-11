@@ -4,7 +4,6 @@
     <title>Email Security Analysis Results</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     <style>
-        /* Keep all your existing styles exactly as they are */
         body {
             font-family: 'Segoe UI', Arial, sans-serif;
             background: #e9eff5;
@@ -267,22 +266,23 @@
                 <div class="info-row"><span class="label">Link Risk Score:</span> {{ analysis.link_risk.link_risk_score }}</div>
                 <div class="info-row"><span class="label">Total Links:</span> {{ analysis.link_risk.total_links }}</div>
                 <div class="info-row"><span class="label">Suspicious Links:</span> {{ analysis.link_risk.suspicious_link_count }}</div>
-                {% if analysis.link_risk.link_details %}
+                
+                {% if analysis.get('domain_url_analysis', {}).get('url_analyses') %}
                 <div class="link-details">
+                    <strong>Link Details:</strong>
                     <ul>
-                        {% for detail in analysis.link_risk.link_details %}
-                        {% if detail.type == 'url' %}
+                        {% for url_info in analysis.domain_url_analysis.url_analyses %}
+                        {% if url_info.get('is_suspicious') %}
                         <li>
-                            <div class="url-label">URL:</div>
-                            <div class="url-container">
-                                {% if detail.url|length > 80 %}
-                                    <span class="url-truncated" title="{{ detail.url }}">{{ detail.url[:80] }}...</span>
-                                {% else %}
-                                    <span class="url-text">{{ detail.url }}</span>
-                                {% endif %}
-                                <span class="url-risk">{{ detail.risk_level }} RISK</span>
+                            <div class="url-label">{{ url_info.get('analyzed_url', 'Unknown URL') }}</div>
+                            <span class="risk-high">SUSPICIOUS</span>
+                            {% if url_info.get('reasons') %}
+                            <div class="url-issues">
+                                {% for reason in url_info.reasons %}
+                                <div>• {{ reason }}</div>
+                                {% endfor %}
                             </div>
-                            <div class="url-issues"><strong>Issues:</strong> {{ detail.description }}</div>
+                            {% endif %}
                         </li>
                         {% endif %}
                         {% endfor %}
@@ -323,18 +323,18 @@
                 </div>
             </div>
             {% endif %}
+
             {% if analysis.ml_prediction %}
             <div class="ml-prediction">
                 <strong>ML Prediction:</strong>
                 {% if analysis.ml_prediction.get('error') %}
                     Error: {{ analysis.ml_prediction.error }}
                 {% else %}
-                    {{ analysis.ml_prediction.prediction|title }}
-                    ({{ "%.0f"|format(analysis.ml_prediction.probability * 100) }}% confident)
-            {% endif %}
+                    {{ analysis.ml_prediction.prediction|title }} 
+                    ({{ "%.1f"|format(analysis.ml_prediction.probability * 100) }}% confidence)
+                {% endif %}
             </div>
             {% endif %}
-
         </div>
         {% endfor %}
     </div>
