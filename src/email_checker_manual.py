@@ -20,6 +20,8 @@ class AnalysisResult:
     domain_mismatches: List[Dict[str, str]]
     spam_score: float
     is_suspicious: bool
+    word_count: int  # Added word count
+    subject: str  # Added subject for reference
 
 class EmailSecurityAnalyzer:
     """
@@ -256,18 +258,99 @@ class EmailSecurityAnalyzer:
         return mismatches
 
     def parse_email_file(self, file_content: str) -> Dict:
-        """Parse raw email content and extract metadata."""
+        """Parse raw email content and extract metadata - handles both proper email format and simple text."""
+        # Try to parse as proper email first
         parser = Parser()
-        email_obj = parser.parsestr(file_content)
-        return {
-            'from': email_obj.get('From', ''),
-            'to': email_obj.get('To', ''),
-            'subject': email_obj.get('Subject', ''),
-            'date': email_obj.get('Date', ''),
-            'content_type': email_obj.get('Content-Type', ''),
-            'spam_status': email_obj.get('X-Spam-Status', ''),
-            'body': self.get_email_body(email_obj)
+        try:
+            email_obj = parser.parsestr(file_content)
+            
+            # Check if we got valid headers
+            from_header = email_obj.get('From', '')
+            subject_header = email_obj.get('Subject', '')
+            body = self.get_email_body(email_obj)
+            
+            # If body is empty or very short, try alternative extraction
+            if not body or len(body.strip()) < 10:
+                body = self.extract_body_from_text(file_content)
+            
+            return {
+                'from': from_header,
+                'to': email_obj.get('To', ''),
+                'subject': subject_header,
+                'date': email_obj.get('Date', ''),
+                'content_type': email_obj.get('Content-Type', ''),
+                'spam_status': email_obj.get('X-Spam-Status', ''),
+                'body': body
+            }
+        except Exception as e:
+            # Fallback: parse as simple text format
+            return self.parse_simple_text_format(file_content)
+
+    def extract_body_from_text(self, text: str) -> str:
+        """Extract body from simple text format (fallback method)."""
+        lines = text.split('\n')
+        body_lines = []
+        in_body = False
+        
+        for line in lines:
+            # Skip header lines
+            if ':' in line and not in_body:
+                header_match = re.match(r'^[A-Za-z-]+:', line)
+                if header_match:
+                    continue
+            else:
+                in_body = True
+            
+            if in_body:
+                body_lines.append(line)
+        
+        return '\n'.join(body_lines).strip()
+
+    def parse_simple_text_format(self, file_content: str) -> Dict:
+        """Parse email in simple text format (From:, To:, Subject:, etc.)."""
+        result = {
+            'from': '',
+            'to': '',
+            'subject': '',
+            'date': '',
+            'content_type': '',
+            'spam_status': '',
+            'body': ''
         }
+        
+        lines = file_content.split('\n')
+        body_start = 0
+        
+        # Extract headers
+        for i, line in enumerate(lines):
+            line_lower = line.lower()
+            if line_lower.startswith('from:'):
+                result['from'] = line.split(':', 1)[1].strip()
+            elif line_lower.startswith('to:'):
+                result['to'] = line.split(':', 1)[1].strip()
+            elif line_lower.startswith('subject:'):
+                result['subject'] = line.split(':', 1)[1].strip()
+            elif line_lower.startswith('date:'):
+                result['date'] = line.split(':', 1)[1].strip()
+            elif line_lower.startswith('content-type:'):
+                result['content_type'] = line.split(':', 1)[1].strip()
+            elif line_lower.startswith('x-spam-status:'):
+                result['spam_status'] = line.split(':', 1)[1].strip()
+            elif line.strip() == '' and i > 0:
+                # Empty line usually marks start of body
+                body_start = i + 1
+                break
+        
+        # Extract body (everything after first blank line or after last header)
+        if body_start > 0:
+            result['body'] = '\n'.join(lines[body_start:]).strip()
+        else:
+            # No blank line found, take everything after headers
+            header_count = sum(1 for k, v in result.items() if k != 'body' and v)
+            if header_count > 0:
+                result['body'] = '\n'.join(lines[header_count:]).strip()
+        
+        return result
 
     def get_email_body(self, email_obj) -> str:
         """Extract plain text body from email object."""
@@ -295,6 +378,12 @@ class EmailSecurityAnalyzer:
 
         return body
 
+    def count_words(self, text: str) -> int:
+        """Count words in text."""
+        # Remove extra whitespace and split by whitespace
+        words = text.split()
+        return len(words)
+
     def extract_spam_score(self, spam_status: str) -> float:
         """Extract spam score from X-Spam-Status header."""
         if not spam_status:
@@ -310,7 +399,12 @@ class EmailSecurityAnalyzer:
             email_data = self.parse_email_file(file_content)
             from_address = email_data['from']
             sender_domain = self.extract_domain_from_email(from_address)
-            all_text = f"{email_data['subject']} {email_data['body']}"
+            subject = email_data['subject']
+            body = email_data['body']
+            all_text = f"{subject} {body}"
+            
+            # Count words in body
+            word_count = self.count_words(body)
 
             suspicious_domains = self.analyze_domain_similarity(sender_domain)
             extracted_urls = self.extract_urls(all_text)
@@ -318,6 +412,7 @@ class EmailSecurityAnalyzer:
             ip_addresses = self.extract_ip_addresses(all_text)
             domain_mismatches = self.detect_domain_mismatches(all_text, extracted_urls)
             spam_score = self.extract_spam_score(email_data['spam_status'])
+            
             # Final suspicion decision
             is_suspicious = (
                 len(suspicious_domains) > 0 or
@@ -336,7 +431,9 @@ class EmailSecurityAnalyzer:
                 ip_addresses=ip_addresses,
                 domain_mismatches=domain_mismatches,
                 spam_score=spam_score,
-                is_suspicious=is_suspicious
+                is_suspicious=is_suspicious,
+                word_count=word_count,
+                subject=subject
             )
 
         except Exception as e:
@@ -350,7 +447,9 @@ class EmailSecurityAnalyzer:
                 ip_addresses=[],
                 domain_mismatches=[],
                 spam_score=0.0,
-                is_suspicious=False
+                is_suspicious=False,
+                word_count=0,
+                subject=""
             )
 
     def analyze_multiple_files(self, file_contents: Dict[str, str]) -> List[AnalysisResult]:
@@ -376,17 +475,19 @@ class EmailSecurityAnalyzer:
         for result in results:
             report += f" FILE: {result.filename}\n"
             report += f"   Sender Domain: {result.sender_domain}\n"
+            report += f"   Subject: {result.subject[:50]}{'...' if len(result.subject) > 50 else ''}\n"
+            report += f"   Word Count: {result.word_count}\n"
             report += f"   Spam Score: {result.spam_score}\n"
-            report += f"   Status: {' SUSPICIOUS' if result.is_suspicious else ' CLEAN'}\n" # Highlight if suspicious else clean
+            report += f"   Status: {'🚨 SUSPICIOUS' if result.is_suspicious else '✅ CLEAN'}\n"
             
             if result.suspicious_domains:
                 report += f"    Domain Similarity Alerts:\n"
-                for domain, similarity in result.suspicious_domains[:3]:  # Top 3
+                for domain, similarity in result.suspicious_domains[:3]:
                     report += f"     • Similar to {domain} ({similarity:.1f}%)\n"
             
             if result.extracted_urls:
                 report += f"    URLs Found: {len(result.extracted_urls)}\n"
-                for url in result.extracted_urls[:3]:  # First 3
+                for url in result.extracted_urls[:3]:
                     report += f"     • {url}\n"
             
             if result.suspicious_urls:
@@ -397,7 +498,7 @@ class EmailSecurityAnalyzer:
                         report += f"       - {reason}\n"
             
             if result.ip_addresses:
-                report += f"   IP Addresses: {', '.join(result.ip_addresses)}\n"
+                report += f"    IP Addresses: {', '.join(result.ip_addresses)}\n"
             
             if result.domain_mismatches:
                 report += f"    Domain Mismatches:\n"
@@ -422,7 +523,7 @@ class SimpleEmailAnalyzer:
                 try:
                     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                         email_files[filepath] = f.read()
-                    print(f" Loaded: {filepath}")
+                    print(f"✅ Loaded: {filepath}")
                 except Exception as e:
                     print(f" Error loading {filepath}: {e}")
             else:
@@ -431,7 +532,7 @@ class SimpleEmailAnalyzer:
         return self._run_analysis(email_files)
     
     def analyze_folder(self, folder_path, recursive=True, file_extensions=None):
-        #"""Analyze all email files in a folder"""
+        """Analyze all email files in a folder"""
         if file_extensions is None:
             file_extensions = ['.txt', '.eml', '.msg']
         
@@ -462,7 +563,7 @@ class SimpleEmailAnalyzer:
         return self._run_analysis(email_files)
     
     def analyze_pattern(self, pattern, recursive=True):
-        #"""Analyze files matching a pattern"""
+        """Analyze files matching a pattern"""
         print(f" Analyzing files matching pattern: {pattern}")
         
         email_files = {}
@@ -505,18 +606,16 @@ class SimpleEmailAnalyzer:
                 if file_paths:
                     return self.analyze_files(file_paths)
                 else:
-                    print("No files entered!")
+                    print(" No files entered!")
             
             elif choice == "2":
                 folder_path = input("\nEnter folder path: ").strip()
                 recursive = input("Search subfolders too? (y/n): ").strip().lower() == 'y'
                 
-                # Ask for file extensions
                 print("File extensions to look for (press Enter for default: .txt .eml .msg):")
                 ext_input = input().strip()
                 if ext_input:
                     extensions = [ext.strip() for ext in ext_input.split()]
-                    # Add dots if missing
                     extensions = [ext if ext.startswith('.') else f'.{ext}' for ext in extensions]
                 else:
                     extensions = ['.txt', '.eml', '.msg']
@@ -553,7 +652,7 @@ class SimpleEmailAnalyzer:
             print(" No email files to analyze!")
             return []
         
-        print(f"\n Running security analysis on {len(email_files)} files...")
+        print(f"\n🔍 Running security analysis on {len(email_files)} files...")
         
         # Run analysis
         results = self.analyzer.analyze_multiple_files(email_files)
@@ -572,6 +671,8 @@ class SimpleEmailAnalyzer:
                 if result.is_suspicious:
                     print(f"\n {result.filename}")
                     print(f"   Sender: {result.sender_domain}")
+                    print(f"   Subject: {result.subject[:50]}{'...' if len(result.subject) > 50 else ''}")
+                    print(f"   Word Count: {result.word_count}")
                     print(f"   Spam Score: {result.spam_score}")
                     
                     # Show specific threats
@@ -589,7 +690,7 @@ class SimpleEmailAnalyzer:
                         print(f"    Threats: {', '.join(threats)}")
         
         # Generate detailed report
-        print(f"\n DETAILED REPORT:")
+        print(f"\n📊 DETAILED REPORT:")
         print("=" * 60)
         report = self.analyzer.generate_report(results)
         print(report)
@@ -604,7 +705,7 @@ def main():
     if len(sys.argv) > 1:
         # Command line mode
         if sys.argv[1] == '--help' or sys.argv[1] == '-h':
-            print(" SIMPLE EMAIL ANALYZER")
+            print("📧 SIMPLE EMAIL ANALYZER")
             print("=" * 30)
             print("Usage:")
             print("  python email_checker_script.py                    # Interactive mode")
