@@ -205,7 +205,7 @@ class DomainURLDetector:
 
     def _check_suspicious_patterns(self, domain: str, reasons: List[str]) -> None:
         for pattern in self.suspicious_patterns:
-            if re.search(pattern, domain):  # FIXED: removed the incorrect "or" clause
+            if re.search(pattern, domain):  
                 reasons.append(f'Matches suspicious pattern: {pattern}')
 
     def _check_url_shorteners(self, domain: str, reasons: List[str]) -> None:

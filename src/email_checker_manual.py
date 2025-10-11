@@ -478,7 +478,7 @@ class EmailSecurityAnalyzer:
             report += f"   Subject: {result.subject[:50]}{'...' if len(result.subject) > 50 else ''}\n"
             report += f"   Word Count: {result.word_count}\n"
             report += f"   Spam Score: {result.spam_score}\n"
-            report += f"   Status: {'🚨 SUSPICIOUS' if result.is_suspicious else '✅ CLEAN'}\n"
+            report += f"   Status: {' SUSPICIOUS' if result.is_suspicious else '✅ CLEAN'}\n"
             
             if result.suspicious_domains:
                 report += f"    Domain Similarity Alerts:\n"
@@ -523,7 +523,7 @@ class SimpleEmailAnalyzer:
                 try:
                     with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
                         email_files[filepath] = f.read()
-                    print(f"✅ Loaded: {filepath}")
+                    print(f" Loaded: {filepath}")
                 except Exception as e:
                     print(f" Error loading {filepath}: {e}")
             else:
@@ -652,7 +652,7 @@ class SimpleEmailAnalyzer:
             print(" No email files to analyze!")
             return []
         
-        print(f"\n🔍 Running security analysis on {len(email_files)} files...")
+        print(f"\n Running security analysis on {len(email_files)} files...")
         
         # Run analysis
         results = self.analyzer.analyze_multiple_files(email_files)
@@ -690,7 +690,7 @@ class SimpleEmailAnalyzer:
                         print(f"    Threats: {', '.join(threats)}")
         
         # Generate detailed report
-        print(f"\n📊 DETAILED REPORT:")
+        print(f"\n DETAILED REPORT:")
         print("=" * 60)
         report = self.analyzer.generate_report(results)
         print(report)
@@ -705,7 +705,7 @@ def main():
     if len(sys.argv) > 1:
         # Command line mode
         if sys.argv[1] == '--help' or sys.argv[1] == '-h':
-            print("📧 SIMPLE EMAIL ANALYZER")
+            print(" SIMPLE EMAIL ANALYZER")
             print("=" * 30)
             print("Usage:")
             print("  python email_checker_script.py                    # Interactive mode")
