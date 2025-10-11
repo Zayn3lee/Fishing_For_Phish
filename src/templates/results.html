@@ -323,18 +323,18 @@
                 </div>
             </div>
             {% endif %}
-
             {% if analysis.ml_prediction %}
             <div class="ml-prediction">
                 <strong>ML Prediction:</strong>
                 {% if analysis.ml_prediction.get('error') %}
                     Error: {{ analysis.ml_prediction.error }}
                 {% else %}
-                    {{ analysis.ml_prediction.prediction|title }} 
-                    ({{ "%.1f"|format(analysis.ml_prediction.probability * 100) }}% confidence)
-                {% endif %}
+                    {{ analysis.ml_prediction.prediction|title }}
+                    ({{ "%.0f"|format(analysis.ml_prediction.probability * 100) }}% confident)
+            {% endif %}
             </div>
             {% endif %}
+
         </div>
         {% endfor %}
     </div>
