@@ -478,7 +478,7 @@ class EmailSecurityAnalyzer:
             report += f"   Subject: {result.subject[:50]}{'...' if len(result.subject) > 50 else ''}\n"
             report += f"   Word Count: {result.word_count}\n"
             report += f"   Spam Score: {result.spam_score}\n"
-            report += f"   Status: {' SUSPICIOUS' if result.is_suspicious else '✅ CLEAN'}\n"
+            report += f"   Status: {' SUSPICIOUS' if result.is_suspicious else ' CLEAN'}\n"
             
             if result.suspicious_domains:
                 report += f"    Domain Similarity Alerts:\n"
@@ -579,61 +579,7 @@ class SimpleEmailAnalyzer:
         
         print(f" Found {len(email_files)} files")
         return self._run_analysis(email_files)
-    
-    def interactive_analysis(self):
-        """Interactive mode - ask user what to analyze"""
-        print("\n SIMPLE EMAIL ANALYZER - INTERACTIVE MODE")
-        print("=" * 50)
-        
-        while True:
-            print("\nWhat would you like to analyze?")
-            print("1. Specific files (enter file paths)")
-            print("2. Entire folder")
-            print("3. Files matching a pattern (*.txt, etc.)")
-            print("4. Exit")
-            
-            choice = input("\nEnter choice (1-4): ").strip()
-            
-            if choice == "1":
-                print("\nEnter file paths (one per line, press Enter twice when done):")
-                file_paths = []
-                while True:
-                    path = input().strip()
-                    if not path:
-                        break
-                    file_paths.append(path)
-                
-                if file_paths:
-                    return self.analyze_files(file_paths)
-                else:
-                    print(" No files entered!")
-            
-            elif choice == "2":
-                folder_path = input("\nEnter folder path: ").strip()
-                recursive = input("Search subfolders too? (y/n): ").strip().lower() == 'y'
-                
-                print("File extensions to look for (press Enter for default: .txt .eml .msg):")
-                ext_input = input().strip()
-                if ext_input:
-                    extensions = [ext.strip() for ext in ext_input.split()]
-                    extensions = [ext if ext.startswith('.') else f'.{ext}' for ext in extensions]
-                else:
-                    extensions = ['.txt', '.eml', '.msg']
-                
-                return self.analyze_folder(folder_path, recursive, extensions)
-            
-            elif choice == "3":
-                pattern = input("\nEnter file pattern (e.g., *.txt, emails/*.eml): ").strip()
-                recursive = input("Search subfolders too? (y/n): ").strip().lower() == 'y'
-                
-                return self.analyze_pattern(pattern, recursive)
-            
-            elif choice == "4":
-                print(" Goodbye!")
-                return []
-            
-            else:
-                print(" Invalid choice! Please enter 1-4.")
+
     
     def _read_file(self, filepath):
         """Read a single file safely"""
@@ -696,48 +642,3 @@ class SimpleEmailAnalyzer:
         print(report)
     
         return results
-
-def main():
-    """Main function with simple command line interface"""
-    analyzer = SimpleEmailAnalyzer()
-    
-    # Check command line arguments
-    if len(sys.argv) > 1:
-        # Command line mode
-        if sys.argv[1] == '--help' or sys.argv[1] == '-h':
-            print(" SIMPLE EMAIL ANALYZER")
-            print("=" * 30)
-            print("Usage:")
-            print("  python email_checker_script.py                    # Interactive mode")
-            print("  python email_checker_script.py file1.txt file2.txt  # Analyze specific files")
-            print("  python email_checker_script.py --folder /path/to/emails  # Analyze folder")
-            print("  python email_checker_script.py --pattern '*.txt'  # Analyze pattern")
-            print("\nExamples:")
-            print("  python email_checker_script.py email1.txt email2.eml")
-            print("  python email_checker_script.py --folder ./emails")
-            print("  python email_checker_script.py --pattern 'inbox/*.txt'")
-            return
-        
-        elif sys.argv[1] == '--folder':
-            if len(sys.argv) > 2:
-                analyzer.analyze_folder(sys.argv[2])
-            else:
-                print(" Please specify folder path")
-        
-        elif sys.argv[1] == '--pattern':
-            if len(sys.argv) > 2:
-                analyzer.analyze_pattern(sys.argv[2])
-            else:
-                print(" Please specify file pattern")
-        
-        else:
-            # Treat all arguments as file paths
-            file_paths = sys.argv[1:]
-            analyzer.analyze_files(file_paths)
-    
-    else:
-        # Interactive mode
-        analyzer.interactive_analysis()
-
-if __name__ == "__main__":
-    main()
