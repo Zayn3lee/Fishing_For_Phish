@@ -94,7 +94,7 @@ class DomainURLDetector:
             'paypal', 'google', 'microsoft', 'amazon', 'apple', 
             'facebook', 'meta', 'instagram', 'twitter', 'netflix',
             'linkedin', 'dropbox', 'adobe', 'yahoo', 'ebay',
-            'citibank', 'chase', 'wellsfargo', 'bankofamerica'
+            'citibank',
         ]
 
     def extract_urls_from_text(self, text: str) -> List[str]:
